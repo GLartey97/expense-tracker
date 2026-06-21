@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Expense Tracker — Sign in</title>
+  <script>try{var _t=localStorage.getItem('et_theme_v1');if(_t)document.documentElement.setAttribute('data-theme',_t);}catch(e){}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0a0e0f;
+      --bg-grad: radial-gradient(1200px 600px at 80% -10%, rgba(45,212,168,.06), transparent 60%);
+      --surface: #12191a; --surface-2: #19211f; --elev: #1d2624;
+      --border: #232d2c; --text: #eef3f1; --text-dim: #c2ccc9; --muted: #7e8b88;
+      --accent: #2dd4a8; --accent-fill: #199f7d; --accent-fill-hover: #21b88f;
+      --accent-soft: rgba(45,212,168,.12); --accent-line: rgba(45,212,168,.28); --on-accent: #04130e;
+      --neg: #ff6b6b; --neg-soft: rgba(255,107,107,.12);
+      --shadow: 0 1px 0 rgba(255,255,255,.02), 0 12px 30px -18px rgba(0,0,0,.7);
+    }
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg: #eef1f0;
+      --bg-grad: radial-gradient(1200px 600px at 80% -10%, rgba(15,138,106,.06), transparent 60%);
+      --surface: #ffffff; --surface-2: #f5f8f6; --elev: #ffffff;
+      --border: #e2e8e5; --text: #10201c; --text-dim: #36433f; --muted: #6a7672;
+      --accent: #0f8a6a; --accent-fill: #11785d; --accent-fill-hover: #0e6850;
+      --accent-soft: rgba(15,138,106,.10); --accent-line: rgba(15,138,106,.30); --on-accent: #ffffff;
+      --neg: #d6402a; --neg-soft: rgba(214,64,42,.10);
+      --shadow: 0 1px 2px rgba(16,32,28,.04), 0 16px 36px -24px rgba(16,32,28,.22);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg); background-image: var(--bg-grad); background-attachment: fixed;
+      color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased; letter-spacing: -.01em;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 18px; padding: 30px 26px; width: 100%; max-width: 380px; box-shadow: var(--shadow);
+    }
+    .brand { display: flex; align-items: center; gap: 11px; margin-bottom: 22px; }
+    .logo-badge {
+      width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+      background: var(--accent-soft); color: var(--accent);
+      display: flex; align-items: center; justify-content: center; border: 1px solid var(--accent-line);
+    }
+    .logo-badge svg { width: 21px; height: 21px; }
+    .brand-title { font-weight: 700; font-size: 16px; letter-spacing: -.02em; }
+    .brand-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+    h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; letter-spacing: -.02em; }
+    .sub { font-size: 12.5px; color: var(--muted); margin-bottom: 20px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 13px; }
+    label { font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    input {
+      padding: 11px 13px; border: 1px solid var(--border); border-radius: 11px;
+      font-family: inherit; font-size: 14px; color: var(--text); background: var(--surface-2); width: 100%;
+      transition: border-color .15s, box-shadow .15s; -webkit-appearance: none; appearance: none;
+    }
+    input::placeholder { color: var(--muted); }
+    input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .btn {
+      padding: 12px 18px; border: none; border-radius: 11px; font-family: inherit; font-size: 13.5px;
+      font-weight: 700; cursor: pointer; transition: all .15s; width: 100%; margin-top: 6px;
+      background: var(--accent-fill); color: var(--on-accent);
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    }
+    .btn:hover { background: var(--accent-fill-hover); transform: translateY(-1px); }
+    .btn:disabled { opacity: .6; cursor: default; transform: none; }
+    .btn svg { width: 16px; height: 16px; }
+    .toggle { font-size: 12.5px; color: var(--muted); text-align: center; margin-top: 18px; }
+    .toggle a { color: var(--accent); font-weight: 700; cursor: pointer; text-decoration: none; }
+    .toggle a:hover { text-decoration: underline; }
+    .msg {
+      font-size: 12px; font-weight: 600; padding: 10px 12px; border-radius: 10px; margin-bottom: 14px;
+      display: none; align-items: center; gap: 8px;
+    }
+    .msg.show { display: flex; }
+    .msg.error { background: var(--neg-soft); color: var(--neg); border: 1px solid color-mix(in srgb, var(--neg) 30%, transparent); }
+    .msg.ok { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-line); }
+    .msg svg { width: 15px; height: 15px; flex-shrink: 0; }
+    .spinner { width: 15px; height: 15px; border: 2px solid var(--accent-line); border-top-color: var(--on-accent); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <span class="logo-badge"><i data-lucide="wallet"></i></span>
+      <div>
+        <div class="brand-title">Expense Tracker</div>
+        <div class="brand-sub">Personal Finance Manager</div>
+      </div>
+    </div>
+
+    <h1 id="formTitle">Welcome back</h1>
+    <p class="sub" id="formSub">Sign in to your account to continue.</p>
+
+    <div class="msg" id="msg"></div>
+
+    <form id="authForm" autocomplete="on">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" placeholder="e.g. gizer" autocomplete="username" required minlength="3" maxlength="32"/>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required minlength="6"/>
+      </div>
+      <button type="submit" class="btn" id="submitBtn">
+        <span id="submitLabel">Sign in</span>
+      </button>
+    </form>
+
+    <p class="toggle" id="toggleWrap">
+      <span id="toggleText">Don't have an account?</span>
+      <a id="toggleLink" onclick="toggleMode()">Create one</a>
+    </p>
+  </div>
+
+  <script>
+    let mode = 'login'; // or 'register'
+    const $ = id => document.getElementById(id);
+
+    function refreshIcons() { if (window.lucide) lucide.createIcons(); }
+
+    function setMode(m) {
+      mode = m;
+      const reg = m === 'register';
+      $('formTitle').textContent = reg ? 'Create your account' : 'Welcome back';
+      $('formSub').textContent   = reg ? 'Pick a username and password to get started.' : 'Sign in to your account to continue.';
+      $('submitLabel').textContent = reg ? 'Create account' : 'Sign in';
+      $('toggleText').textContent  = reg ? 'Already have an account?' : "Don't have an account?";
+      $('toggleLink').textContent  = reg ? 'Sign in' : 'Create one';
+      $('password').setAttribute('autocomplete', reg ? 'new-password' : 'current-password');
+      hideMsg();
+    }
+    function toggleMode() { setMode(mode === 'login' ? 'register' : 'login'); }
+
+    function showMsg(text, kind) {
+      const el = $('msg');
+      el.className = 'msg show ' + kind;
+      el.innerHTML = '<i data-lucide="' + (kind === 'error' ? 'alert-triangle' : 'check-circle-2') + '"></i><span></span>';
+      el.querySelector('span').textContent = text;
+      refreshIcons();
+    }
+    function hideMsg() { $('msg').className = 'msg'; }
+
+    function setLoading(on) {
+      const btn = $('submitBtn'), lbl = $('submitLabel');
+      btn.disabled = on;
+      lbl.innerHTML = on ? '<span class="spinner"></span>' : (mode === 'register' ? 'Create account' : 'Sign in');
+    }
+
+    $('authForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideMsg();
+      const username = $('username').value.trim();
+      const password = $('password').value;
+      if (username.length < 3) { showMsg('Username must be at least 3 characters.', 'error'); return; }
+      if (password.length < 6) { showMsg('Password must be at least 6 characters.', 'error'); return; }
+
+      setLoading(true);
+      try {
+        const r = await fetch('/api/' + mode, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) { showMsg(d.error || 'Something went wrong. Try again.', 'error'); setLoading(false); return; }
+        showMsg(mode === 'register' ? 'Account created — taking you in…' : 'Signed in — taking you in…', 'ok');
+        window.location.href = '/';
+      } catch (err) {
+        showMsg('Network error. Is the server running?', 'error');
+        setLoading(false);
+      }
+    });
+
+    // If already signed in, skip straight to the app.
+    fetch('/api/me').then(r => { if (r.ok) window.location.href = '/'; }).catch(() => {});
+    setMode('login');
+    refreshIcons();
+  </script>
+</body>
+</html>

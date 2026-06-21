@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# User data (contains hashed passwords + personal finance data — never commit)
+data/
+
+# Secrets
+.env
+
+# Logs / OS
+*.log
+.DS_Store
+Thumbs.db
