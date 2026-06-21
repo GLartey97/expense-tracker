@@ -27,6 +27,16 @@ npm start
 
 Then open **http://localhost:5173**, create an account, and start tracking.
 
+## Install on your phone (PWA)
+
+This is a Progressive Web App — once it's hosted over HTTPS, anyone can install it like a native Android app:
+
+1. Open the site in **Chrome on Android**.
+2. Tap the **⋮ menu → "Add to Home screen"** (or accept the install banner).
+3. It launches full-screen with its own icon — no Play Store needed.
+
+On iOS, use **Share → Add to Home Screen** in Safari. The UI shell is cached for offline launch; viewing your data still needs a connection.
+
 ## The AI Advisor (optional)
 
 The four core tabs work with **no setup**. The **Advisor** tab calls the [Claude API](https://www.anthropic.com), which is pay-as-you-go and separate from any Claude.ai subscription. To enable it:
