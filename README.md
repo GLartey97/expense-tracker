@@ -27,6 +27,18 @@ npm start
 
 Then open **http://localhost:5173**, create an account, and start tracking.
 
+## Deploy (free, for phone install)
+
+To install it on a phone you need a public HTTPS URL. The repo includes a Render Blueprint:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/GLartey97/expense-tracker)
+
+1. Click the button (or go to [render.com](https://render.com) → **New → Blueprint** and pick this repo). Sign in with GitHub.
+2. Render reads `render.yaml`, creates a free web service, builds, and gives you a URL like `https://expense-tracker-xxxx.onrender.com`.
+3. (Optional) In the service's **Environment** tab, add `ANTHROPIC_API_KEY` to enable the Advisor.
+
+> Free tier notes: the service **sleeps after ~15 min idle** (first request then takes ~50s to wake), and has **no persistent disk** — `data/db.json` resets on each restart/redeploy, so accounts are not permanent. Great for trying it out; for permanent accounts use a host with a persistent volume (Fly.io) or a database.
+
 ## Install on your phone (PWA)
 
 This is a Progressive Web App — once it's hosted over HTTPS, anyone can install it like a native Android app:

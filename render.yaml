@@ -1,0 +1,16 @@
+# Render Blueprint — deploys the Expense Tracker as a free Node web service.
+# Render auto-injects PORT (server.js already reads process.env.PORT).
+# After the first deploy you'll get a public https URL you can install on Android.
+services:
+  - type: web
+    name: expense-tracker
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    autoDeploy: true
+    envVars:
+      # Optional — only needed to enable the AI Advisor tab.
+      # Leave blank in the dashboard if you don't have a Claude API key.
+      - key: ANTHROPIC_API_KEY
+        sync: false
