@@ -176,6 +176,16 @@ const server = http.createServer(async (req, res) => {
   const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
 
   try {
+    // ---- Health / diagnostics (no secrets) ----
+    if (urlPath === '/api/health' && req.method === 'GET') {
+      return sendJSON(res, 200, {
+        ok: true,
+        storage: pgPool ? 'postgres' : 'file',
+        persistent: !!pgPool,
+        accounts: Object.keys(db.users).length,
+      });
+    }
+
     // ---- Auth ----
     if (urlPath === '/api/register' && req.method === 'POST') {
       const { username, password } = await readBody(req);
