@@ -42,19 +42,48 @@ try {
   console.warn('[advisor] @anthropic-ai/sdk not installed — run `npm install`');
 }
 
-// ── Tiny JSON DB ──
-function loadDB() {
-  try { return JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); }
-  catch { return { users: {}, data: {}, sessions: {} }; }
+// ── Storage ──
+// The whole state ({users, data, sessions}) is held in memory and persisted as
+// one JSON blob. With DATABASE_URL set, it persists to Postgres (survives restarts —
+// required on hosts with ephemeral disks like Render free). Without it, falls back
+// to a local data/db.json file so local dev needs zero setup.
+const DATABASE_URL = process.env.DATABASE_URL;
+let db = { users: {}, data: {}, sessions: {} };
+let pgPool = null;
+
+async function initDB() {
+  if (DATABASE_URL) {
+    const { Pool } = require('pg');
+    const local = /@(localhost|127\.0\.0\.1)[:/]/.test(DATABASE_URL);
+    pgPool = new Pool({ connectionString: DATABASE_URL, ssl: local ? false : { rejectUnauthorized: false } });
+    await pgPool.query('CREATE TABLE IF NOT EXISTS app_state (id int PRIMARY KEY, data jsonb NOT NULL)');
+    const r = await pgPool.query('SELECT data FROM app_state WHERE id = 1');
+    if (r.rows.length) db = r.rows[0].data;
+    else await pgPool.query('INSERT INTO app_state (id, data) VALUES (1, $1)', [db]);
+    console.log('[db] Using Postgres — data persists across restarts.');
+  } else {
+    try { db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); } catch { /* fresh */ }
+    console.log('[db] Using local file data/db.json. Set DATABASE_URL for persistent Postgres (e.g. on Render).');
+  }
+  db.users = db.users || {};
+  db.data = db.data || {};
+  db.sessions = db.sessions || {};
 }
-let db = loadDB();
+
 let saveTimer = null;
 function saveDB() {
-  // debounce writes so rapid edits don't thrash the disk
+  // debounce so rapid edits don't thrash the store
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+    if (pgPool) {
+      pgPool.query('UPDATE app_state SET data = $1 WHERE id = 1', [db])
+        .catch(e => console.error('[db] save failed:', e.message));
+    } else {
+      try {
+        fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+        fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+      } catch (e) { console.error('[db] save failed:', e.message); }
+    }
   }, 150);
 }
 
@@ -234,9 +263,14 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Expense Tracker running at http://localhost:${PORT}`);
-  console.log(anthropic
-    ? '[advisor] Claude API key detected — Advisor is live.'
-    : '[advisor] No ANTHROPIC_API_KEY — Advisor will show a "not configured" message until you set one.');
+initDB().then(() => {
+  server.listen(PORT, () => {
+    console.log(`Expense Tracker running at http://localhost:${PORT}`);
+    console.log(anthropic
+      ? '[advisor] Claude API key detected — Advisor is live.'
+      : '[advisor] No ANTHROPIC_API_KEY — Advisor will show a "not configured" message until you set one.');
+  });
+}).catch((err) => {
+  console.error('[db] Startup failed — could not initialize storage:', err.message);
+  process.exit(1);
 });

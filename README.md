@@ -35,9 +35,13 @@ To install it on a phone you need a public HTTPS URL. The repo includes a Render
 
 1. Click the button (or go to [render.com](https://render.com) → **New → Blueprint** and pick this repo). Sign in with GitHub.
 2. Render reads `render.yaml`, creates a free web service, builds, and gives you a URL like `https://expense-tracker-xxxx.onrender.com`.
-3. (Optional) In the service's **Environment** tab, add `ANTHROPIC_API_KEY` to enable the Advisor.
+3. **For accounts that persist, add a database** (strongly recommended on Render free):
+   - Create a free Postgres database at [neon.tech](https://neon.tech) and copy its connection string.
+   - In the Render service's **Environment** tab, add `DATABASE_URL` = that connection string.
+   - The app auto-detects it and stores everything in Postgres instead of the (ephemeral) file.
+4. (Optional) Also add `ANTHROPIC_API_KEY` to enable the Advisor.
 
-> Free tier notes: the service **sleeps after ~15 min idle** (first request then takes ~50s to wake), and has **no persistent disk** — `data/db.json` resets on each restart/redeploy, so accounts are not permanent. Great for trying it out; for permanent accounts use a host with a persistent volume (Fly.io) or a database.
+> Free tier notes: the service **sleeps after ~15 min idle** (first request then takes ~50s to wake). Its disk is **ephemeral** — without `DATABASE_URL`, `data/db.json` resets on each restart/redeploy and everyone gets logged out. Setting `DATABASE_URL` (Neon) fixes this completely and keeps accounts permanent.
 
 ## Install on your phone (PWA)
 
