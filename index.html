@@ -334,6 +334,7 @@
     .priority-Low .pdot    { background: var(--pos); }
     .wish-row { display: flex; align-items: center; gap: 12px; padding: 13px; background: var(--surface-2); border-radius: 12px; border: 1px solid var(--border); transition: opacity .2s; }
     .wish-row.bought { opacity: .5; }
+    .wish-main { flex: 1; min-width: 0; }
     .wish-ico { width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-line); }
     .wish-ico svg { width: 16px; height: 16px; }
     .wish-name { font-size: 13.5px; font-weight: 600; }
@@ -394,6 +395,13 @@
       nav button { min-width: 60px; padding: 7px 4px; }
       main { padding: 14px; }
       .card { padding: 16px; border-radius: 14px; margin-bottom: 12px; }
+      /* Wishlist rows: reflow to two lines (name on top, price + actions below)
+         so long item names no longer wrap one word per line. */
+      .wish-row { flex-wrap: wrap; row-gap: 9px; }
+      .wish-row .wish-ico { display: none; }
+      .wish-main { flex: 1 1 100%; }
+      .wish-price { order: 2; }
+      .wish-actions { order: 3; margin-left: auto; }
     }
     @media (max-width: 380px) {
       .stats-3, .form-grid, .charts-row, .wish-stats { grid-template-columns: 1fr; }
@@ -1159,7 +1167,7 @@ function renderWishlist() {
     const bs=w.bought&&w.boughtDate?`Bought ${new Date(w.boughtDate+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`:'' ;
     return `<div class="wish-row ${w.bought?'bought':''}">
       <span class="wish-ico"><i data-lucide="${w.bought?'check':'shopping-bag'}"></i></span>
-      <div style="flex:1;min-width:0">
+      <div class="wish-main">
         <div class="wish-name">${escHtml(w.name)}</div>
         <div class="wish-meta">
           <span class="priority-badge priority-${w.priority}"><span class="pdot"></span>${w.priority}</span>
