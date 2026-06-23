@@ -10,6 +10,10 @@ services:
     startCommand: node server.js
     autoDeploy: true
     envVars:
+      # Set this in the dashboard to a Neon Postgres connection string so accounts
+      # persist across restarts. Without it the app uses an ephemeral file (data resets).
+      - key: DATABASE_URL
+        sync: false
       # Optional — only needed to enable the AI Advisor tab.
       # Leave blank in the dashboard if you don't have a Claude API key.
       - key: ANTHROPIC_API_KEY
