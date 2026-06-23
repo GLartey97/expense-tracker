@@ -279,6 +279,16 @@ initDB().then(() => {
     console.log(anthropic
       ? '[advisor] Claude API key detected — Advisor is live.'
       : '[advisor] No ANTHROPIC_API_KEY — Advisor will show a "not configured" message until you set one.');
+
+    // Keep-awake: on Render's free tier the service sleeps after ~15 min idle and
+    // shows a cold-start page on the next visit. Pinging our own public URL every
+    // 13 min counts as inbound traffic and keeps the instance warm. RENDER_EXTERNAL_URL
+    // is injected by Render, so this only runs in that environment.
+    const SELF_URL = process.env.RENDER_EXTERNAL_URL;
+    if (SELF_URL && typeof fetch === 'function') {
+      setInterval(() => { fetch(SELF_URL + '/api/health').catch(() => {}); }, 13 * 60 * 1000);
+      console.log('[keep-awake] Pinging ' + SELF_URL + '/api/health every 13 min to prevent free-tier sleep.');
+    }
   });
 }).catch((err) => {
   console.error('[db] Startup failed — could not initialize storage:', err.message);

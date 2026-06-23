@@ -402,6 +402,15 @@
       .wish-main { flex: 1 1 100%; }
       .wish-price { order: 2; }
       .wish-actions { order: 3; margin-left: auto; }
+      /* Overview charts stack vertically on phones — no horizontal sliding to reach Daily Spending */
+      .charts-row { grid-template-columns: 1fr; }
+      /* Recon statement: collapse the wide 5-column table into stacked label/value cards */
+      .recon-table thead { display: none; }
+      .recon-table, .recon-table tbody, .recon-table tr, .recon-table td { display: block; width: 100%; }
+      .recon-table tr { border: 1px solid var(--border); border-radius: 12px; padding: 4px 13px; margin-bottom: 10px; background: var(--surface-2); }
+      .recon-table td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border: none; text-align: right !important; max-width: none !important; white-space: normal !important; overflow: visible !important; }
+      .recon-table td + td { border-top: 1px solid var(--border-soft); }
+      .recon-table td::before { content: attr(data-label); color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
     }
     @media (max-width: 380px) {
       .stats-3, .form-grid, .charts-row, .wish-stats { grid-template-columns: 1fr; }
@@ -1059,11 +1068,11 @@ function renderRecon() {
     const catBadge = r.type==='expense' ? catPill(r.cat, true) : `<span style="display:inline-flex;align-items:center;gap:5px;padding:2px 9px 2px 7px;background:var(--pos-soft);color:var(--pos);border-radius:20px;font-size:10px;font-weight:600;"><span class="cat-dot" style="background:var(--pos)"></span>Income</span>`;
     const dateStr  = new Date(r.date+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'});
     return `<tr>
-      <td style="white-space:nowrap;color:var(--muted);font-size:12px;" class="num">${dateStr}</td>
-      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;">${escHtml(r.desc)}</td>
-      <td>${catBadge}</td>
-      <td style="text-align:right">${amtStr}</td>
-      <td style="text-align:right">${balStr}</td>
+      <td data-label="Date" style="white-space:nowrap;color:var(--muted);font-size:12px;" class="num">${dateStr}</td>
+      <td data-label="Description" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;">${escHtml(r.desc)}</td>
+      <td data-label="Type">${catBadge}</td>
+      <td data-label="Amount" style="text-align:right">${amtStr}</td>
+      <td data-label="Balance" style="text-align:right">${balStr}</td>
     </tr>`;
   }).join('');
 }
