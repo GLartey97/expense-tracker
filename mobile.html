@@ -1208,12 +1208,14 @@ function renderHome() {
     '</div>';
   }).join('') : '<div class="empty-row">No entries yet this month. Tap + to log one.</div>';
 
-  var headerRight = state.needsLogin
-    ? '<a class="signin-pill" href="/login.html">Sign in</a>'
-    : '<div class="icon-btns">' +
-        '<button class="icon-btn" type="button" aria-label="Notifications">' + I.bell + '<span class="dot"></span></button>' +
-        '<button class="icon-btn" type="button" data-act="settings" aria-label="Settings">' + I.gear + '</button>' +
-      '</div>';
+  // Signed out, the bell is pointless but Settings is not — currency,
+  // categories and the display toggles are all local.
+  var headerRight = '<div class="icon-btns">' +
+    (state.needsLogin
+      ? '<a class="signin-pill" href="/login.html">Sign in</a>'
+      : '<button class="icon-btn" type="button" aria-label="Notifications">' + I.bell + '<span class="dot"></span></button>') +
+    '<button class="icon-btn" type="button" data-act="settings" aria-label="Settings">' + I.gear + '</button>' +
+  '</div>';
 
   var drawdown = state.prefs.drawdown
     ? '<div class="drawdown">' +
