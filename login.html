@@ -132,6 +132,15 @@
   </div>
 
   <script>
+    // Where to land after signing in. /mobile.html sends ?next=/mobile.html so
+    // the phone view doesn't dump you into the desktop app on the way back.
+    // Same-origin paths only — an absolute URL or a "//host" would turn this
+    // into an open redirect.
+    function nextTarget() {
+      var raw = new URLSearchParams(location.search).get('next') || '/';
+      return /^\/(?![\/\\])/.test(raw) ? raw : '/';
+    }
+
     let mode = 'login'; // or 'register'
     const $ = id => document.getElementById(id);
 
@@ -183,7 +192,7 @@
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { showMsg(d.error || 'Something went wrong. Try again.', 'error'); setLoading(false); return; }
         showMsg(mode === 'register' ? 'Account created — taking you in…' : 'Signed in — taking you in…', 'ok');
-        window.location.href = '/';
+        window.location.href = nextTarget();
       } catch (err) {
         showMsg('Network error. Is the server running?', 'error');
         setLoading(false);
@@ -191,7 +200,7 @@
     });
 
     // If already signed in, skip straight to the app.
-    fetch('/api/me').then(r => { if (r.ok) window.location.href = '/'; }).catch(() => {});
+    fetch('/api/me').then(r => { if (r.ok) window.location.href = nextTarget(); }).catch(() => {});
     setMode('login');
     refreshIcons();
   </script>

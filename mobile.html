@@ -825,6 +825,10 @@ var DEFAULT_PREFS = {
 
 var APP_VERSION = '1.4.0';
 
+/* Sign-in round trip. Without ?next, login.html sends you to '/' — the desktop
+   layout — so leaving the phone view for auth was a one-way trip. */
+var LOGIN_URL = '/login.html?next=' + encodeURIComponent(location.pathname);
+
 var SEED_MONTH = '2026-09';
 var SEED_INCOME_FALLBACK = 6200;
 
@@ -1212,7 +1216,7 @@ function renderHome() {
   // categories and the display toggles are all local.
   var headerRight = '<div class="icon-btns">' +
     (state.needsLogin
-      ? '<a class="signin-pill" href="/login.html">Sign in</a>'
+      ? '<a class="signin-pill" href="' + LOGIN_URL + '">Sign in</a>'
       : '<button class="icon-btn" type="button" aria-label="Notifications">' + I.bell + '<span class="dot"></span></button>') +
     '<button class="icon-btn" type="button" data-act="settings" aria-label="Settings">' + I.gear + '</button>' +
   '</div>';
@@ -1550,7 +1554,7 @@ function renderSettingsRoot() {
   var footer =
     '<div class="set-footer">' +
       (state.needsLogin
-        ? '<a class="btn-quiet" href="/login.html" style="display:block;text-align:center;text-decoration:none">Sign in</a>'
+        ? '<a class="btn-quiet" href="' + LOGIN_URL + '" style="display:block;text-align:center;text-decoration:none">Sign in</a>'
         : '<button class="btn-quiet" type="button" data-act="signout">Sign out</button>') +
       '<button class="btn-faint" type="button" data-act="delete-account">Delete account and data</button>' +
       '<div class="set-version">Expense Tracker · v' + APP_VERSION + '</div>' +
@@ -2027,7 +2031,7 @@ function exportCSV() {
 
 async function signOut() {
   try { await fetch('/api/logout', { method: 'POST' }); } catch (e) { /* offline */ }
-  location.href = '/login.html';
+  location.href = LOGIN_URL;
 }
 
 async function savePassword() {
