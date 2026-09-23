@@ -1,6 +1,6 @@
 // Expense Tracker backend.
 //   - Static file serving (index.html, login.html, assets)
-//   - User accounts (register / login / logout / me) with scrypt-hashed passwords
+//   - User accounts (register / login / logout / me / password) with scrypt-hashed passwords
 //   - Per-user data persistence (expenses / income / wishlist)
 //   - AI Advisor proxy to the Claude API (POST /api/advice)
 //
@@ -210,6 +210,29 @@ const server = http.createServer(async (req, res) => {
         return sendJSON(res, 401, { error: 'Wrong username or password.' });
       const token = createSession(user.id);
       return sendJSON(res, 200, { username: user.username }, { 'Set-Cookie': sessionCookie(token) });
+    }
+
+    if (urlPath === '/api/password' && req.method === 'POST') {
+      const user = userFromReq(req);
+      if (!user) return sendJSON(res, 401, { error: 'Not signed in' });
+      const { current, next } = await readBody(req);
+      // Knowing the session is not enough to take the account over.
+      if (!verifyPassword(String(current || ''), user.password))
+        return sendJSON(res, 401, { error: 'Current password is wrong.' });
+      const np = String(next || '');
+      if (np.length < 8 || !/\d/.test(np))
+        return sendJSON(res, 400, { error: 'New password needs 8+ characters and a number.' });
+      if (verifyPassword(np, user.password))
+        return sendJSON(res, 400, { error: 'That is already your password.' });
+
+      // userFromReq returns a copy — write through the stored record.
+      db.users[user.username].password = hashPassword(np);
+      // Drop every other session, so a stolen cookie dies with the change.
+      for (const [token, sess] of Object.entries(db.sessions)) {
+        if (sess.userId === user.id && token !== user._token) delete db.sessions[token];
+      }
+      saveDB();
+      return sendJSON(res, 200, { ok: true });
     }
 
     if (urlPath === '/api/logout' && req.method === 'POST') {
