@@ -746,6 +746,29 @@ button.set-row:hover { background: var(--color-surface); }
   font-size: 12px; line-height: 1.55; color: var(--color-neutral-500);
 }
 
+/* import */
+.imp-or {
+  text-align: center; font-size: 11.5px; color: var(--color-neutral-600);
+  margin: 16px 0 10px;
+}
+.imp-paste {
+  width: 100%; padding: 11px 12px; border-radius: var(--radius-sm);
+  background: var(--color-bg); border: 1px solid var(--line-16);
+  color: var(--color-text); font-size: 12.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  line-height: 1.5; outline: none; resize: vertical; min-height: 90px;
+}
+.imp-paste:focus { border-color: var(--color-accent); }
+.imp-report {
+  margin-top: 16px; padding: 14px; border-radius: var(--radius-md);
+  font-size: 12.5px; line-height: 1.55;
+}
+.imp-report.ok { background: var(--color-surface-2); box-shadow: 0 0 0 1px rgba(145, 132, 217, .35); }
+.imp-report.err { background: var(--color-surface-2); box-shadow: 0 0 0 1px var(--line-16); color: var(--color-neutral-400); }
+.imp-report__head { font-size: 13.5px; font-weight: 600; color: var(--color-accent-400); margin-bottom: 8px; }
+.imp-list { margin: 0; padding-left: 18px; color: var(--color-neutral-400); }
+.imp-list li { margin: 2px 0; }
+.imp-note { margin-top: 9px; color: var(--color-neutral-600); font-size: 11.5px; }
+
 /* ---------- toast ------------------------------------------------- */
 
 .toast-layer {
@@ -918,6 +941,8 @@ var state = {
   pwBusy: false,
   pwUpdated: false,
   pwUnsupported: false,
+  importText: '',
+  importReport: null,
 };
 
 var adviceTimer = null;
@@ -1181,6 +1206,8 @@ var I = {
   download: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10M8 10.5l4 3.5 4-3.5M5 19h14"/></svg>',
   chevR: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>',
   pencil: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20h4l11-11-4-4L4 16z"/></svg>',
+  archive: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1.5"/><path d="M5 9v9.5a1.5 1.5 0 001.5 1.5h11a1.5 1.5 0 001.5-1.5V9"/><path d="M10 13h4" stroke-linecap="round"/></svg>',
+  upload: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V5M8 8.5L12 5l4 3.5M5 19h14"/></svg>',
   trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>',
 };
 
@@ -1550,6 +1577,25 @@ function renderSettingsRoot() {
           '<span class="set-row__hint">CSV of every entry this month</span>' +
         '</span>' +
       '</button>' +
+    '</div>' +
+
+    '<div class="set-group-label">Backup</div>' +
+    '<div class="set-group">' +
+      '<button class="set-row" type="button" data-act="export-backup">' +
+        '<span class="set-row__ico">' + I.archive + '</span>' +
+        '<span class="set-row__body">' +
+          '<span class="set-row__title">Export backup</span>' +
+          '<span class="set-row__hint">Everything, as one JSON file</span>' +
+        '</span>' +
+      '</button>' +
+      '<button class="set-row" type="button" data-act="go-import">' +
+        '<span class="set-row__ico">' + I.upload + '</span>' +
+        '<span class="set-row__body">' +
+          '<span class="set-row__title">Import from another device</span>' +
+          '<span class="set-row__hint">Merges a backup — nothing is deleted</span>' +
+        '</span>' +
+        '<span class="set-row__chev">' + I.chevR + '</span>' +
+      '</button>' +
     '</div>';
 
   var footer =
@@ -1691,10 +1737,44 @@ function renderSettingsPassword() {
     note;
 }
 
+function renderSettingsImport() {
+  var r = state.importReport;
+  var report = '';
+  if (r && r.error) {
+    report = '<div class="imp-report err">' + esc(r.error) + '</div>';
+  } else if (r) {
+    var added = [
+      r.expenses + ' expense' + (r.expenses === 1 ? '' : 's'),
+      r.income + ' income',
+      r.wishlist + ' wishlist item' + (r.wishlist === 1 ? '' : 's'),
+      r.categories + ' categor' + (r.categories === 1 ? 'y' : 'ies'),
+    ];
+    var total = r.expenses + r.income + r.wishlist + r.categories;
+    report = '<div class="imp-report ok">' +
+      '<div class="imp-report__head">' + (total ? 'Imported ' + total + ' new ' + (total === 1 ? 'item' : 'items') : 'Nothing new to add') + '</div>' +
+      '<ul class="imp-list">' + added.map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('') + '</ul>' +
+      (r.skipped ? '<div class="imp-note">' + r.skipped + ' already here, skipped.</div>' : '') +
+      (r.prefsSkipped ? '<div class="imp-note">Settings in the file were left alone — this device keeps its own.</div>' : '') +
+    '</div>';
+  }
+
+  return '<div class="set-lede">Export a backup on the other device, then pick that file here. ' +
+      'Entries already on this device are skipped, and nothing is deleted — importing the same file twice changes nothing.</div>' +
+    '<button class="btn-outline" type="button" data-act="pick-backup">' + I.upload + ' Choose backup file</button>' +
+    '<div class="imp-or">or paste the file contents</div>' +
+    '<textarea class="imp-paste" data-field="importText" rows="5" placeholder=\'{ "app": "expense-tracker", … }\' aria-label="Backup JSON">' + esc(state.importText) + '</textarea>' +
+    '<button class="btn-add ' + (state.importText.trim() ? 'ready' : '') + '" type="button" data-act="import-paste">Import pasted backup</button>' +
+    report;
+}
+
 function renderSettings() {
-  var title = state.sview === 'cats' ? 'Categories' : state.sview === 'password' ? 'Password' : 'Settings';
+  var title = state.sview === 'cats' ? 'Categories'
+            : state.sview === 'password' ? 'Password'
+            : state.sview === 'import' ? 'Import'
+            : 'Settings';
   var body = state.sview === 'cats' ? renderSettingsCats()
            : state.sview === 'password' ? renderSettingsPassword()
+           : state.sview === 'import' ? renderSettingsImport()
            : renderSettingsRoot();
 
   return '<section class="screen">' +
@@ -2016,18 +2096,211 @@ function exportCSV() {
     ]);
   });
   var csv = rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n');
+  var name = 'expenses-' + state.monthKey + '.csv';
+
+  // Inside the Android shell a blob download is silently ignored, so hand the
+  // file to the app and let it open the system share sheet instead.
+  if (window.AppExport && typeof window.AppExport.postMessage === 'function') {
+    try {
+      window.AppExport.postMessage(JSON.stringify({ name: name, csv: '﻿' + csv }));
+      flash(d.txns.length + ' entries ready to save');
+      return;
+    } catch (e) { /* fall through to the browser path */ }
+  }
+
   try {
     var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
-    a.download = 'expenses-' + state.monthKey + '.csv';
+    a.download = name;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
-  } catch (e) { /* download blocked (e.g. inside a WebView) — the toast still lands */ }
+  } catch (e) { /* download blocked — the toast still lands */ }
   flash(d.txns.length + ' entries exported as CSV');
+}
+
+/* ---------- backup / restore ---------------------------------- */
+
+var BACKUP_FORMAT = 1;
+
+function buildBackup() {
+  return {
+    app: 'expense-tracker',
+    format: BACKUP_FORMAT,
+    exportedAt: new Date().toISOString(),
+    expenses: state.expenses,
+    income: state.income,
+    wishlist: state.wish,
+    categories: state.cats,
+    prefs: state.prefs,
+  };
+}
+
+function exportBackup() {
+  var json = JSON.stringify(buildBackup(), null, 2);
+  var name = 'expense-tracker-backup-' + todayISO() + '.json';
+  if (window.AppExport && typeof window.AppExport.postMessage === 'function') {
+    try {
+      window.AppExport.postMessage(JSON.stringify({ name: name, csv: json }));
+      flash('Backup ready to save');
+      return;
+    } catch (e) { /* fall through */ }
+  }
+  try {
+    var blob = new Blob([json], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+  } catch (e) { /* download blocked */ }
+  flash('Backup exported');
+}
+
+/* Fresh ids that can't collide with anything already here. */
+function idMaker(existing) {
+  var next = Date.now();
+  return function () {
+    while (existing[next]) next++;
+    existing[next] = true;
+    return next++;
+  };
+}
+
+function norm(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
+
+/* Merge a backup in, skipping anything that already looks present. Never
+   deletes; running the same file twice is a no-op. */
+function mergeBackup(b) {
+  var rep = {
+    expenses: 0, income: 0, wishlist: 0, categories: 0,
+    skipped: 0, prefsSkipped: false,
+  };
+
+  var cats = state.cats.slice();
+  var catNames = {};
+  cats.forEach(function (c) { catNames[norm(c.name)] = true; });
+  (Array.isArray(b.categories) ? b.categories : []).forEach(function (c) {
+    if (!c || !c.name) return;
+    if (catNames[norm(c.name)]) return;
+    var color = /^#[0-9a-fA-F]{6}$/.test(String(c.color || '')) ? c.color : '#9397ab';
+    cats.push({ name: String(c.name).trim(), color: color });
+    catNames[norm(c.name)] = true;
+    rep.categories++;
+  });
+
+  var usedIds = {};
+  state.expenses.forEach(function (e) { usedIds[e.id] = true; });
+  state.income.forEach(function (i) { usedIds[i.id] = true; });
+  state.wish.forEach(function (w) { usedIds[w.id] = true; });
+  var nextId = idMaker(usedIds);
+
+  // Wishlist first: expenses may point at wish ids, which get remapped.
+  var wish = state.wish.slice();
+  var wishKeys = {};
+  wish.forEach(function (w) { wishKeys[norm(w.name) + '|' + (+w.price || 0)] = true; });
+  var wishIdMap = {};
+  (Array.isArray(b.wishlist) ? b.wishlist : []).forEach(function (w) {
+    if (!w || !w.name) return;
+    var key = norm(w.name) + '|' + (+w.price || 0);
+    if (wishKeys[key]) { rep.skipped++; return; }
+    var id = nextId();
+    if (w.id != null) wishIdMap[w.id] = id;
+    wish.push({
+      id: id, name: String(w.name), price: +w.price || 0,
+      priority: w.priority || 'Medium', notes: w.notes || '',
+      bought: !!w.bought, boughtDate: w.boughtDate || null,
+    });
+    wishKeys[key] = true;
+    rep.wishlist++;
+  });
+
+  var expenses = state.expenses.slice();
+  var expKeys = {};
+  expenses.forEach(function (e) {
+    expKeys[e.date + '|' + (+e.amount || 0) + '|' + norm(e.category) + '|' + norm(e.desc)] = true;
+  });
+  (Array.isArray(b.expenses) ? b.expenses : []).forEach(function (e) {
+    if (!e || !e.date) return;
+    var key = e.date + '|' + (+e.amount || 0) + '|' + norm(e.category) + '|' + norm(e.desc);
+    if (expKeys[key]) { rep.skipped++; return; }
+    var row = {
+      id: nextId(), date: String(e.date), amount: round2(+e.amount || 0),
+      category: e.category || 'Miscellaneous', desc: e.desc || '',
+    };
+    // Keep the wishlist link pointing at the item we actually imported.
+    if (e.fromWish != null && wishIdMap[e.fromWish] != null) row.fromWish = wishIdMap[e.fromWish];
+    expenses.push(row);
+    expKeys[key] = true;
+    rep.expenses++;
+  });
+
+  var income = state.income.slice();
+  var incKeys = {};
+  income.forEach(function (i) { incKeys[i.date + '|' + (+i.amount || 0) + '|' + norm(i.source)] = true; });
+  (Array.isArray(b.income) ? b.income : []).forEach(function (i) {
+    if (!i || !i.date) return;
+    var key = i.date + '|' + (+i.amount || 0) + '|' + norm(i.source);
+    if (incKeys[key]) { rep.skipped++; return; }
+    income.push({ id: nextId(), date: String(i.date), amount: round2(+i.amount || 0), source: i.source || 'Income' });
+    incKeys[key] = true;
+    rep.income++;
+  });
+
+  // Preferences stay device-local — silently changing someone's currency or
+  // toggles on import would be a surprise.
+  if (b.prefs && typeof b.prefs === 'object') rep.prefsSkipped = true;
+
+  setState({ cats: cats, wish: wish, expenses: expenses, income: income, importReport: rep });
+  if (rep.categories) persistCats();
+  if (rep.wishlist) persist(WISH_KEY, wish);
+  if (rep.expenses) persist(EXP_KEY, expenses);
+  if (rep.income) persist(INC_KEY, income);
+  return rep;
+}
+
+function runImport(text) {
+  var b;
+  try {
+    b = JSON.parse(text);
+  } catch (e) {
+    setState({ importReport: { error: 'That file is not valid JSON.' } });
+    return;
+  }
+  if (!b || typeof b !== 'object' || Array.isArray(b)) {
+    setState({ importReport: { error: 'That file is not an Expense Tracker backup.' } });
+    return;
+  }
+  if (b.app && b.app !== 'expense-tracker') {
+    setState({ importReport: { error: 'That backup is from a different app (' + esc(String(b.app)).slice(0, 30) + ').' } });
+    return;
+  }
+  var hasAny = ['expenses', 'income', 'wishlist', 'categories'].some(function (k) { return Array.isArray(b[k]); });
+  if (!hasAny) {
+    setState({ importReport: { error: 'No expenses, income, wishlist or categories found in that file.' } });
+    return;
+  }
+  var rep = mergeBackup(b);
+  var total = rep.expenses + rep.income + rep.wishlist + rep.categories;
+  flash(total ? 'Imported ' + total + ' new ' + (total === 1 ? 'item' : 'items') : 'Nothing new to import');
+}
+
+function pickBackupFile() {
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json,.json';
+  input.addEventListener('change', function () {
+    var f = input.files && input.files[0];
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () { runImport(String(reader.result || '')); };
+    reader.onerror = function () { setState({ importReport: { error: 'Could not read that file.' } }); };
+    reader.readAsText(f);
+  });
+  input.click();
 }
 
 async function signOut() {
@@ -2114,6 +2387,10 @@ document.getElementById('app').addEventListener('click', function (e) {
     case 'cat-cancel': return setState({ editCat: -1 });
     case 'cat-add': return catAdd();
     case 'export': return exportCSV();
+    case 'export-backup': return exportBackup();
+    case 'go-import': return setState({ sview: 'import', importReport: null, importText: '' });
+    case 'pick-backup': return pickBackupFile();
+    case 'import-paste': return state.importText.trim() ? runImport(state.importText) : flash('Paste a backup first');
     case 'signout': return signOut();
     case 'pw-save': return savePassword();
     case 'pw-forgot': return flash('Password reset is not set up on this server yet');
@@ -2130,6 +2407,7 @@ document.getElementById('app').addEventListener('input', function (e) {
   var v = e.target.value;
   if (f === 'catname') return setState({ editDraft: Object.assign({}, state.editDraft, { name: v }) });
   if (f === 'newcat') return setState({ newCat: Object.assign({}, state.newCat, { name: v }) });
+  if (f === 'importText') return setState({ importText: v });
   if (f.indexOf('pw-') === 0) {
     var patch = Object.assign({}, state.pw);
     patch[f.slice(3)] = v;
