@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#161826">
+<meta name="color-scheme" content="dark">
+<title>Expense Tracker — Sign in</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* ============================================================
+   Sign in — Nocturne (dark), matching mobile.html.
+   The desktop login.html keeps its own look; this is the phone
+   view's door so the design doesn't change under you mid-flow.
+   ============================================================ */
+
+:root {
+  --color-bg: #161826;
+  --color-surface: #232532;
+  --color-surface-2: #1c1e2c;
+  --color-text: #e9e9ed;
+  --color-accent: #9184d9;
+  --color-neutral-400: #b2b6ca;
+  --color-neutral-500: #9397ab;
+  --color-neutral-600: #75798c;
+  --color-neutral-700: #595d6c;
+  --color-neutral-800: #3f424d;
+  --color-neutral-900: #292b31;
+  --color-accent-300: #d2cefd;
+  --color-accent-400: #b5abfc;
+  --line-16: rgba(233, 233, 237, .16);
+  --line-08: rgba(233, 233, 237, .08);
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius-sm: 8px;
+  --radius-lg: 14px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+
+body {
+  background:
+    radial-gradient(900px 420px at 50% -8%, #23253a, transparent 70%),
+    var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--safe-top) + 28px) 20px calc(var(--safe-bottom) + 28px);
+}
+
+@keyframes noct-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+.wrap { width: 100%; max-width: 380px; animation: noct-fade .3s ease; }
+
+.brand { display: flex; align-items: center; gap: 11px; margin-bottom: 26px; }
+.brand__mark {
+  width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+  background: rgba(145, 132, 217, .14);
+  box-shadow: inset 0 0 0 1px rgba(181, 171, 252, .4);
+  color: var(--color-accent-400);
+  display: flex; align-items: center; justify-content: center;
+}
+.brand__name { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.brand__kicker {
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--color-neutral-600); font-weight: 600; margin-top: 1px;
+}
+
+.card {
+  border-radius: var(--radius-lg);
+  padding: 22px 20px;
+  background: linear-gradient(150deg, #232532, #1b1d2a);
+  box-shadow: 0 0 0 1px var(--color-neutral-800), 0 10px 30px rgba(0, 0, 0, .45);
+}
+h1 { font-size: 21px; font-weight: 500; letter-spacing: -.02em; margin: 0 0 5px; }
+.sub { font-size: 13px; color: var(--color-neutral-500); margin: 0 0 20px; }
+
+.field { margin-bottom: 14px; }
+.field label {
+  display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--color-neutral-500); font-weight: 600; margin-bottom: 6px;
+}
+.input-wrap { position: relative; display: flex; }
+input {
+  width: 100%; padding: 12px 13px; border-radius: var(--radius-sm);
+  background: var(--color-bg); border: 1px solid var(--line-16);
+  color: var(--color-text); font-size: 14.5px; font-family: inherit;
+  outline: none; transition: border-color .15s ease;
+}
+input::placeholder { color: var(--color-neutral-700); }
+input:focus { border-color: var(--color-accent); }
+input#password { padding-right: 46px; letter-spacing: .06em; }
+input#password:placeholder-shown { letter-spacing: normal; }
+
+.peek {
+  position: absolute; right: 4px; top: 0; bottom: 0; width: 40px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: 0; color: var(--color-neutral-600);
+  cursor: pointer; padding: 0;
+}
+.peek:hover { color: var(--color-accent-400); }
+
+.hint { font-size: 11.5px; color: var(--color-neutral-600); margin-top: 6px; }
+
+.btn {
+  width: 100%; margin-top: 18px; padding: 14px; border-radius: var(--radius-sm);
+  background: transparent; border: 1px solid var(--color-accent);
+  color: var(--color-accent-400); font-size: 14.5px; font-weight: 500;
+  font-family: inherit; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background .15s ease;
+}
+.btn:hover:not(:disabled) { background: rgba(145, 132, 217, .14); }
+.btn:disabled { opacity: .6; cursor: progress; }
+
+.spinner {
+  width: 15px; height: 15px; border-radius: 50%;
+  border: 2px solid rgba(145, 132, 217, .3); border-top-color: var(--color-accent);
+  display: inline-block; animation: spin .7s linear infinite;
+}
+
+.msg {
+  display: none; margin-top: 15px; padding: 11px 13px; border-radius: var(--radius-sm);
+  font-size: 12.5px; line-height: 1.5;
+}
+.msg.show { display: block; animation: noct-fade .2s ease; }
+.msg.error { background: rgba(233, 233, 237, .05); box-shadow: inset 0 0 0 1px rgba(233, 233, 237, .18); color: var(--color-neutral-400); }
+.msg.ok { background: rgba(145, 132, 217, .12); box-shadow: inset 0 0 0 1px rgba(145, 132, 217, .4); color: var(--color-accent-300); }
+
+.toggle { text-align: center; margin-top: 18px; font-size: 13px; color: var(--color-neutral-500); }
+.toggle button {
+  background: none; border: 0; padding: 2px 4px; cursor: pointer;
+  color: var(--color-accent-400); font-size: 13px; font-weight: 500; font-family: inherit;
+}
+.toggle button:hover { text-decoration: underline; }
+
+.foot { text-align: center; margin-top: 22px; font-size: 11.5px; color: var(--color-neutral-700); }
+.foot a { color: var(--color-neutral-600); text-decoration: none; }
+.foot a:hover { color: var(--color-accent-400); }
+
+svg { display: block; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <div class="brand__mark">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>
+      </div>
+      <div>
+        <div class="brand__name">Expense Tracker</div>
+        <div class="brand__kicker">Nocturne · mobile</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h1 id="formTitle">Welcome back</h1>
+      <p class="sub" id="formSub">Sign in to your account to continue.</p>
+
+      <form id="authForm" novalidate>
+        <div class="field">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" placeholder="your name"
+                 autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+          <div class="hint" id="userHint" hidden>3–32 characters: letters, numbers, _ . -</div>
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="input-wrap">
+            <input type="password" id="password" name="password" placeholder="••••••••"
+                   autocomplete="current-password" required>
+            <button class="peek" type="button" id="peek" aria-label="Show password">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div class="hint" id="passHint" hidden>At least 6 characters.</div>
+        </div>
+
+        <button class="btn" type="submit" id="submitBtn"><span id="submitLabel">Sign in</span></button>
+      </form>
+
+      <div class="msg" id="msg"></div>
+
+      <div class="toggle">
+        <span id="toggleText">Don't have an account?</span>
+        <button type="button" id="toggleLink">Create one</button>
+      </div>
+    </div>
+
+    <div class="foot"><a id="deskLink" href="/login.html">Use the desktop view instead</a></div>
+  </div>
+
+<script>
+'use strict';
+
+/* Where to land afterwards. Same-origin paths only — an absolute URL or a
+   "//host" would make ?next= an open redirect. Mirrors login.html. */
+function nextTarget() {
+  var raw = new URLSearchParams(location.search).get('next') || '/mobile.html';
+  return /^\/(?![\/\\])/.test(raw) ? raw : '/mobile.html';
+}
+
+var mode = 'login'; // or 'register'
+var $ = function (id) { return document.getElementById(id); };
+
+function setMode(m) {
+  mode = m;
+  var reg = m === 'register';
+  $('formTitle').textContent = reg ? 'Create your account' : 'Welcome back';
+  $('formSub').textContent = reg ? 'Pick a username and password to get started.' : 'Sign in to your account to continue.';
+  $('submitLabel').textContent = reg ? 'Create account' : 'Sign in';
+  $('toggleText').textContent = reg ? 'Already have an account?' : "Don't have an account?";
+  $('toggleLink').textContent = reg ? 'Sign in' : 'Create one';
+  $('password').setAttribute('autocomplete', reg ? 'new-password' : 'current-password');
+  $('userHint').hidden = !reg;
+  $('passHint').hidden = !reg;
+  hideMsg();
+}
+
+function showMsg(text, kind) {
+  var el = $('msg');
+  el.className = 'msg show ' + kind;
+  el.textContent = text;
+}
+function hideMsg() { $('msg').className = 'msg'; $('msg').textContent = ''; }
+
+function setLoading(on) {
+  $('submitBtn').disabled = on;
+  $('submitLabel').innerHTML = on
+    ? '<span class="spinner"></span>'
+    : (mode === 'register' ? 'Create account' : 'Sign in');
+}
+
+$('toggleLink').addEventListener('click', function () {
+  setMode(mode === 'login' ? 'register' : 'login');
+});
+
+$('peek').addEventListener('click', function () {
+  var p = $('password');
+  var show = p.type === 'password';
+  p.type = show ? 'text' : 'password';
+  this.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  p.focus();
+});
+
+$('authForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideMsg();
+  var username = $('username').value.trim();
+  var password = $('password').value;
+  // Mirrors the server's own rules so the common mistakes never make a round trip.
+  if (username.length < 3) { showMsg('Username must be at least 3 characters.', 'error'); return; }
+  if (password.length < 6) { showMsg('Password must be at least 6 characters.', 'error'); return; }
+
+  setLoading(true);
+  try {
+    var r = await fetch('/api/' + mode, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username, password: password }),
+    });
+    var d = {};
+    try { d = await r.json(); } catch (err) { /* non-JSON error body */ }
+    if (!r.ok) {
+      showMsg(d.error || 'Something went wrong. Try again.', 'error');
+      setLoading(false);
+      return;
+    }
+    showMsg(mode === 'register' ? 'Account created — taking you in…' : 'Signed in — taking you in…', 'ok');
+    window.location.href = nextTarget();
+  } catch (err) {
+    showMsg('Could not reach the server. It may still be starting up — try again in a moment.', 'error');
+    setLoading(false);
+  }
+});
+
+/* Keep the "desktop view" escape hatch pointing somewhere sensible. */
+$('deskLink').href = '/login.html';
+
+/* Already signed in? Don't make them do it twice. */
+fetch('/api/me').then(function (r) {
+  if (r.ok) window.location.href = nextTarget();
+}).catch(function () { /* offline — let them try the form */ });
+
+setMode('login');
+</script>
+</body>
+</html>

@@ -825,9 +825,10 @@ var DEFAULT_PREFS = {
 
 var APP_VERSION = '1.4.0';
 
-/* Sign-in round trip. Without ?next, login.html sends you to '/' — the desktop
-   layout — so leaving the phone view for auth was a one-way trip. */
-var LOGIN_URL = '/login.html?next=' + encodeURIComponent(location.pathname);
+/* Sign-in round trip. mobile-login.html is the Nocturne-styled door — the
+   desktop login.html keeps its own look. ?next brings you back here rather
+   than dumping you on the desktop layout. */
+var LOGIN_URL = '/mobile-login.html?next=' + encodeURIComponent(location.pathname);
 
 var SEED_MONTH = '2026-09';
 var SEED_INCOME_FALLBACK = 6200;
