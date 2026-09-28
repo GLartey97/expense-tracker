@@ -29,7 +29,9 @@ const ROOT = __dirname;
   } catch { /* no .env file — that's fine */ }
 })();
 const PORT = process.env.PORT || 5173;
-const DB_PATH = path.join(ROOT, 'data', 'db.json');
+// Overridable so the test suite can point at a throwaway file instead of the
+// real store. Unset in production, where it falls back to data/db.json.
+const DB_PATH = process.env.DB_PATH || path.join(ROOT, 'data', 'db.json');
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 // Arrays the whole-blob endpoint accepts. The three entry lists are also
 // writable per-row via /api/items; categories are here because they are small
@@ -57,7 +59,9 @@ function appUrl(req) {
 async function sendMail(to, subject, text) {
   if (!mailEnabled()) return { ok: false, reason: 'no-key' };
   try {
-    const r = await fetch('https://api.resend.com/emails', {
+    // Overridable so the test suite can point at a local catcher. Unset in
+    // production, where it falls back to Resend proper.
+    const r = await fetch(process.env.RESEND_URL || 'https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${RESEND_API_KEY}`,
@@ -254,13 +258,20 @@ const TYPES = {
   '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png', '.jpg': 'image/jpeg',
   '.webmanifest': 'application/manifest+json',
 };
+// Never served, however the URL is spelled.
+const PRIVATE_FILES = new Set(['server.js', 'serve.js', 'package.json', 'package-lock.json', 'render.yaml']);
+const PRIVATE_DIRS = ['data', 'node_modules', 'test', 'tools'];
+
 function serveStatic(req, res, urlPath) {
   if (urlPath === '/' || urlPath === '') urlPath = '/index.html';
-  const filePath = path.join(ROOT, path.normalize(urlPath));
-  // path-traversal guard + never serve the DB or server source
-  if (!filePath.startsWith(ROOT) || filePath === DB_PATH ||
-      ['/server.js', '/serve.js', '/package.json', '/package-lock.json'].includes(urlPath) ||
-      urlPath.startsWith('/data') || urlPath.startsWith('/node_modules')) {
+  // Resolve first, then judge the *resolved* path. Judging the raw URL let
+  // "/../server.js" through, because normalize() collapses it to "/server.js".
+  const filePath = path.resolve(ROOT, '.' + path.normalize('/' + urlPath));
+  const rel = path.relative(ROOT, filePath);
+  const first = rel.split(path.sep)[0];
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel) ||
+      filePath === DB_PATH || PRIVATE_FILES.has(rel) || PRIVATE_DIRS.includes(first) ||
+      first.startsWith('.')) {            // .env, .git, .gitignore …
     res.writeHead(403); return res.end('Forbidden');
   }
   fs.readFile(filePath, (err, data) => {

@@ -18,3 +18,15 @@ services:
       # Leave blank in the dashboard if you don't have a Claude API key.
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Optional — enables "Forgot password" emails. Get a key at resend.com.
+      # Without it the app says recovery isn't configured instead of failing.
+      - key: RESEND_API_KEY
+        sync: false
+      # The public URL used in reset links. Render injects RENDER_EXTERNAL_URL,
+      # which server.js falls back to, so this is only needed for a custom domain.
+      - key: APP_URL
+        sync: false
+      # Sender address. Defaults to Resend's shared onboarding@resend.dev, which
+      # only delivers to your own Resend signup address until you verify a domain.
+      - key: MAIL_FROM
+        sync: false

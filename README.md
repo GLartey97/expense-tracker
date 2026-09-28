@@ -87,14 +87,45 @@ expense-tracker/
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ANTHROPIC_API_KEY` | _(unset)_ | Enables the Advisor tab |
+| `DATABASE_URL` | _(unset)_ | Postgres connection string; without it data lives in `data/db.json` |
+| `RESEND_API_KEY` | _(unset)_ | Enables the "Forgot password" email flow |
+| `APP_URL` | `RENDER_EXTERNAL_URL` | Public base URL used in reset links |
+| `MAIL_FROM` | `onboarding@resend.dev` | Sender address for recovery emails |
 | `PORT` | `5173` | Port the server listens on |
 
 Set these in a `.env` file (see `.env.example`) or your environment.
+
+## Tests
+
+```bash
+npm test
+```
+
+No dependencies to install — the suite spawns `server.js` on a random port
+against a throwaway database and drives it over real HTTP, so it exercises the
+actual endpoints rather than a re-implementation of them. It covers accounts and
+sessions, password change, login rate limiting, the per-entry write endpoints
+(including the cross-device overwrite this app used to suffer from), the
+`/api/data` allowlist, the whole reset-token lifecycle with a stubbed mail
+provider, and the security headers and static-file guard.
+
+Recovery tests point the server at a local catcher via `RESEND_URL`, so nothing
+is ever emailed. `.github/workflows/test.yml` runs the same command on every
+push and pull request.
+
+One gap worth knowing about: the backup import/merge and de-duplication logic
+lives in an inline `<script>` inside `mobile.html`, so `node --test` can't import
+it. That path is still only covered by manual testing.
 
 ## Security notes
 
 - `data/` and `.env` are git-ignored — never commit user data or your API key.
 - Passwords are never stored in plaintext (scrypt with per-user salt).
+- Reset tokens are stored as SHA-256 hashes and are single-use, so a leaked
+  database can't be used to take over accounts.
+- The server never serves its own source, `package.json`, `data/`, `test/` or
+  dotfiles, and sends a tight CSP plus `nosniff`, `Referrer-Policy` and
+  `X-Frame-Options: DENY` on every response.
 - This is designed for personal/self-hosted use. If you deploy it publicly, put it behind HTTPS (e.g. a reverse proxy) so session cookies travel securely.
 
 ## License
