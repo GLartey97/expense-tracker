@@ -1,0 +1,19 @@
+# Runs the server test suite on every push and pull request.
+# The suite has no dependencies of its own — it spawns server.js against a
+# throwaway database on a random port — so there is nothing to install.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm test
