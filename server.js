@@ -38,6 +38,49 @@ const DATA_KEYS = ['cowork_expenses_v1', 'cowork_income_v1', 'cowork_wishlist_v1
 // Preferences are an object, not an array, so they get their own allowance.
 const DATA_OBJECT_KEYS = ['cowork_prefs_v1'];
 
+// ── Password recovery (Resend) ──
+// Without a key the endpoints still answer honestly rather than pretending a
+// mail went out. Set RESEND_API_KEY and MAIL_FROM in the Render dashboard.
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const MAIL_FROM = process.env.MAIL_FROM || 'Expense Tracker <onboarding@resend.dev>';
+const RESET_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const mailEnabled = () => Boolean(RESEND_API_KEY);
+
+/** Public origin for links in emails; Render sets RENDER_EXTERNAL_URL. */
+function appUrl(req) {
+  const configured = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL;
+  if (configured) return String(configured).replace(/\/+$/, '');
+  const proto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
+  return `${proto}://${req.headers.host}`;
+}
+
+async function sendMail(to, subject, text) {
+  if (!mailEnabled()) return { ok: false, reason: 'no-key' };
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ from: MAIL_FROM, to: [to], subject, text }),
+    });
+    if (r.ok) return { ok: true };
+    const body = await r.text().catch(() => '');
+    console.warn('[mail] Resend refused:', r.status, body.slice(0, 200));
+    return { ok: false, reason: 'refused' };
+  } catch (e) {
+    console.warn('[mail] Resend unreachable:', e.message);
+    return { ok: false, reason: 'unreachable' };
+  }
+}
+
+// Tokens are stored hashed, so a leaked database still can't be used to reset
+// anyone's password.
+const hashToken = t => crypto.createHash('sha256').update(String(t)).digest('hex');
+const normEmail = e => String(e || '').trim().toLowerCase();
+const looksLikeEmail = e => /^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(e);
+
 // ── Anthropic SDK (optional — Advisor degrades gracefully without a key) ──
 let anthropic = null;
 try {
@@ -53,7 +96,7 @@ try {
 // required on hosts with ephemeral disks like Render free). Without it, falls back
 // to a local data/db.json file so local dev needs zero setup.
 const DATABASE_URL = process.env.DATABASE_URL;
-let db = { users: {}, data: {}, sessions: {} };
+let db = { users: {}, data: {}, sessions: {}, resets: {} };
 let pgPool = null;
 
 async function initDB() {
@@ -73,6 +116,7 @@ async function initDB() {
   db.users = db.users || {};
   db.data = db.data || {};
   db.sessions = db.sessions || {};
+  db.resets = db.resets || {};
 }
 
 let saveTimer = null;
@@ -145,6 +189,11 @@ function rateClear(key) { rateHits.delete(key); }
 // Keep the map from growing without bound on a long-running instance.
 setInterval(() => {
   const now = Date.now();
+  let dropped = 0;
+  for (const [h, rec] of Object.entries(db.resets || {})) {
+    if (!rec || rec.exp < now) { delete db.resets[h]; dropped++; }
+  }
+  if (dropped) saveDB();
   for (const [k, hits] of rateHits) {
     const live = hits.filter(t => now - t < RATE_WINDOW_MS);
     if (live.length) rateHits.set(k, live); else rateHits.delete(k);
@@ -272,7 +321,7 @@ const server = http.createServer(async (req, res) => {
         return sendJSON(res, 429, { error: `Too many attempts. Try again in ${Math.ceil(regWait / 60)} min.` },
           { 'Retry-After': String(regWait) });
       }
-      const { username, password } = await readBody(req);
+      const { username, password, email } = await readBody(req);
       const u = String(username || '').trim().toLowerCase();
       if (u.length < 3 || u.length > 32 || !/^[a-z0-9_.-]+$/.test(u))
         return sendJSON(res, 400, { error: 'Username must be 3–32 chars: letters, numbers, _ . -' });
@@ -280,7 +329,10 @@ const server = http.createServer(async (req, res) => {
         return sendJSON(res, 400, { error: 'Password must be at least 6 characters.' });
       if (db.users[u]) return sendJSON(res, 409, { error: 'That username is taken.' });
       const id = crypto.randomUUID();
-      db.users[u] = { id, username: u, password: hashPassword(password), createdAt: Date.now() };
+      const regEmail = normEmail(email);
+      if (regEmail && !looksLikeEmail(regEmail))
+        return sendJSON(res, 400, { error: 'That does not look like an email address.' });
+      db.users[u] = { id, username: u, password: hashPassword(password), email: regEmail || null, createdAt: Date.now() };
       db.data[id] = {};
       const token = createSession(id);
       return sendJSON(res, 200, { username: u }, { 'Set-Cookie': sessionCookie(token) });
@@ -332,6 +384,91 @@ const server = http.createServer(async (req, res) => {
       }
       saveDB();
       return sendJSON(res, 200, { ok: true });
+    }
+
+    // ---- Recovery email on the account ----
+    if (urlPath === '/api/email' && req.method === 'POST') {
+      const user = userFromReq(req);
+      if (!user) return sendJSON(res, 401, { error: 'Not signed in' });
+      const { email, password } = await readBody(req);
+      // Changing where a reset lands is as sensitive as changing the password.
+      if (!verifyPassword(String(password || ''), user.password))
+        return sendJSON(res, 401, { error: 'Password is wrong.' });
+      const e = normEmail(email);
+      if (e && !looksLikeEmail(e))
+        return sendJSON(res, 400, { error: 'That does not look like an email address.' });
+      if (e && Object.values(db.users).some(u => u.id !== user.id && normEmail(u.email) === e))
+        return sendJSON(res, 409, { error: 'That email is already on another account.' });
+      db.users[user.username].email = e || null;
+      saveDB();
+      return sendJSON(res, 200, { email: e || null, mailEnabled: mailEnabled() });
+    }
+
+    if (urlPath === '/api/email' && req.method === 'GET') {
+      const user = userFromReq(req);
+      if (!user) return sendJSON(res, 401, { error: 'Not signed in' });
+      return sendJSON(res, 200, { email: user.email || null, mailEnabled: mailEnabled() });
+    }
+
+    // ---- Forgot / reset ----
+    if (urlPath === '/api/forgot' && req.method === 'POST') {
+      const wait = rateLimit('forgot:' + clientIp(req));
+      if (wait) {
+        return sendJSON(res, 429, { error: `Too many attempts. Try again in ${Math.ceil(wait / 60)} min.` },
+          { 'Retry-After': String(wait) });
+      }
+      const { account } = await readBody(req);
+      const q = String(account || '').trim().toLowerCase();
+      const user = db.users[q] || Object.values(db.users).find(u => normEmail(u.email) === q);
+
+      if (user && user.email) {
+        const token = crypto.randomBytes(32).toString('hex');
+        db.resets[hashToken(token)] = { userId: user.id, exp: Date.now() + RESET_TTL_MS };
+        saveDB();
+        const link = `${appUrl(req)}/reset.html?token=${token}`;
+        await sendMail(user.email,
+          'Reset your Expense Tracker password',
+          `Someone asked to reset the password for "${user.username}".\n\n` +
+          `Open this link within 30 minutes to choose a new one:\n${link}\n\n` +
+          `If that wasn't you, ignore this email — nothing has changed.`);
+      }
+      // Always the same answer, so this can't be used to discover who has an
+      // account or which addresses are registered.
+      return sendJSON(res, 200, {
+        ok: true,
+        mailEnabled: mailEnabled(),
+        message: mailEnabled()
+          ? 'If that account has a recovery email, a reset link is on its way.'
+          : 'Password reset email is not configured on this server yet.',
+      });
+    }
+
+    if (urlPath === '/api/reset' && req.method === 'POST') {
+      const wait = rateLimit('reset:' + clientIp(req));
+      if (wait) {
+        return sendJSON(res, 429, { error: `Too many attempts. Try again in ${Math.ceil(wait / 60)} min.` },
+          { 'Retry-After': String(wait) });
+      }
+      const { token, password } = await readBody(req);
+      const rec = db.resets[hashToken(token || '')];
+      if (!rec || rec.exp < Date.now()) {
+        if (rec) { delete db.resets[hashToken(token)]; saveDB(); }
+        return sendJSON(res, 400, { error: 'That reset link has expired or already been used.' });
+      }
+      const np = String(password || '');
+      if (np.length < 8 || !/\d/.test(np))
+        return sendJSON(res, 400, { error: 'New password needs 8+ characters and a number.' });
+
+      const user = Object.values(db.users).find(u => u.id === rec.userId);
+      if (!user) return sendJSON(res, 400, { error: 'That account no longer exists.' });
+
+      db.users[user.username].password = hashPassword(np);
+      delete db.resets[hashToken(token)];               // single use
+      for (const [tok, sess] of Object.entries(db.sessions)) {
+        if (sess.userId === user.id) delete db.sessions[tok]; // sign out everywhere
+      }
+      saveDB();
+      return sendJSON(res, 200, { ok: true, username: user.username });
     }
 
     if (urlPath === '/api/logout' && req.method === 'POST') {

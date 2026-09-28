@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#161826">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex">
+<title>Expense Tracker — Reset password</title>
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root {
+  --bg:#161826; --surface:#232532; --surface-2:#1c1e2c; --text:#e9e9ed;
+  --accent:#9184d9; --a300:#d2cefd; --a400:#b5abfc;
+  --n400:#b2b6ca; --n500:#9397ab; --n600:#75798c; --n700:#595d6c; --n800:#3f424d; --n900:#292b31;
+  --line:rgba(233,233,237,.16);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:radial-gradient(900px 420px at 50% -8%,#23253a,transparent 70%),var(--bg);
+  color:var(--text);font-family:"Inter",system-ui,-apple-system,sans-serif;
+  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
+  display:flex;align-items:center;justify-content:center;padding:28px 20px;
+}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important}}
+.wrap{width:100%;max-width:380px;animation:fade .3s ease}
+.brand{display:flex;align-items:center;gap:11px;margin-bottom:26px}
+.mark{width:42px;height:42px;border-radius:12px;flex-shrink:0;background:rgba(145,132,217,.14);
+  box-shadow:inset 0 0 0 1px rgba(181,171,252,.4);color:var(--a400);display:flex;align-items:center;justify-content:center}
+.bname{font-size:17px;font-weight:600;letter-spacing:-.01em}
+.bkick{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--n600);font-weight:600;margin-top:1px}
+.card{border-radius:14px;padding:22px 20px;background:linear-gradient(150deg,#232532,#1b1d2a);
+  box-shadow:0 0 0 1px var(--n800),0 10px 30px rgba(0,0,0,.45)}
+h1{font-size:21px;font-weight:500;letter-spacing:-.02em;margin:0 0 5px}
+.sub{font-size:13px;color:var(--n500);margin:0 0 20px}
+label{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--n500);font-weight:600;margin-bottom:6px}
+.field{margin-bottom:14px}
+input{width:100%;padding:12px 13px;border-radius:8px;background:var(--bg);border:1px solid var(--line);
+  color:var(--text);font-size:14.5px;font-family:inherit;outline:none;letter-spacing:.06em}
+input:focus{border-color:var(--accent)}
+input.mismatch{border-color:rgba(210,206,253,.55)}
+.meter{height:6px;border-radius:4px;background:var(--n900);overflow:hidden;margin-top:14px}
+.meter>div{height:100%;border-radius:4px;transition:width .3s ease;width:0}
+.mrow{display:flex;justify-content:space-between;font-size:11.5px;margin-top:14px}
+.mrow .l{color:var(--n500)}
+.checks{margin-top:14px;display:flex;flex-direction:column;gap:7px}
+.chk{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--n600)}
+.chk .m{width:17px;height:17px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:700;color:var(--n600);box-shadow:inset 0 0 0 1px rgba(233,233,237,.2)}
+.chk.ok{color:#cfd3e5}
+.chk.ok .m{color:var(--bg);background:var(--a400);box-shadow:none}
+.btn{width:100%;margin-top:20px;padding:14px;border-radius:8px;background:transparent;
+  border:1px solid var(--line);color:var(--n700);font-size:14.5px;font-weight:500;font-family:inherit;cursor:not-allowed;
+  display:flex;align-items:center;justify-content:center;gap:8px}
+.btn.ready{border-color:var(--accent);color:var(--a400);cursor:pointer}
+.btn.ready:hover{background:rgba(145,132,217,.14)}
+.spin{width:15px;height:15px;border-radius:50%;border:2px solid rgba(145,132,217,.3);
+  border-top-color:var(--accent);display:inline-block;animation:spin .7s linear infinite}
+.msg{display:none;margin-top:15px;padding:11px 13px;border-radius:8px;font-size:12.5px;line-height:1.5}
+.msg.show{display:block;animation:fade .2s ease}
+.msg.error{background:rgba(233,233,237,.05);box-shadow:inset 0 0 0 1px rgba(233,233,237,.18);color:var(--n400)}
+.msg.ok{background:rgba(145,132,217,.12);box-shadow:inset 0 0 0 1px rgba(145,132,217,.4);color:var(--a300)}
+.foot{text-align:center;margin-top:22px;font-size:11.5px}
+.foot a{color:var(--n600);text-decoration:none}
+.foot a:hover{color:var(--a400)}
+svg{display:block}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <div class="mark">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>
+      </div>
+      <div>
+        <div class="bname">Expense Tracker</div>
+        <div class="bkick">Reset password</div>
+      </div>
+    </div>
+
+    <div class="card" id="card">
+      <h1 id="title">Choose a new password</h1>
+      <p class="sub" id="sub">Eight characters or more, with at least one number.</p>
+
+      <form id="form" novalidate>
+        <div class="field">
+          <label for="pw">New password</label>
+          <input type="password" id="pw" autocomplete="new-password" placeholder="At least 8 characters" required>
+        </div>
+        <div class="field">
+          <label for="pw2">Confirm new password</label>
+          <input type="password" id="pw2" autocomplete="new-password" placeholder="Repeat it" required>
+        </div>
+
+        <div class="mrow"><span class="l">Strength</span><span id="strengthLabel" style="font-weight:600;color:#75798c">Nothing yet</span></div>
+        <div class="meter"><div id="meterFill"></div></div>
+
+        <div class="checks" id="checks"></div>
+
+        <button class="btn" type="submit" id="submit"><span id="label">Update password</span></button>
+      </form>
+
+      <div class="msg" id="msg"></div>
+    </div>
+
+    <div class="foot"><a href="/mobile-login.html">Back to sign in</a></div>
+  </div>
+
+<script>
+'use strict';
+var $ = function (id) { return document.getElementById(id); };
+var token = new URLSearchParams(location.search).get('token') || '';
+
+function showMsg(t, kind) { var m = $('msg'); m.className = 'msg show ' + kind; m.textContent = t; }
+function hideMsg() { $('msg').className = 'msg'; $('msg').textContent = ''; }
+
+var CHECKS = [
+  { label: 'Eight characters or more', test: function (p) { return p.length >= 8; } },
+  { label: 'Contains a number', test: function (p) { return /\d/.test(p); } },
+  { label: 'Both entries match', test: function (p) { return !!p && p === $('pw2').value; } },
+];
+
+function score(p) {
+  return Math.min(4, (p.length >= 8 ? 1 : 0) + (p.length >= 12 ? 1 : 0) +
+    (/\d/.test(p) ? 1 : 0) + (/[^A-Za-z0-9]/.test(p) ? 1 : 0));
+}
+
+function refresh() {
+  var p = $('pw').value;
+  var s = score(p);
+  var label = !p ? 'Nothing yet' : ['Too weak', 'Weak', 'Fair', 'Good', 'Strong'][s];
+  var color = !p ? '#75798c' : ['#595d6c', '#796cbf', '#968ae0', '#b5abfc', '#d2cefd'][s];
+  $('strengthLabel').textContent = label;
+  $('strengthLabel').style.color = color;
+  $('meterFill').style.width = (s * 25) + '%';
+  $('meterFill').style.background = color;
+
+  $('checks').innerHTML = CHECKS.map(function (c) {
+    var ok = c.test(p);
+    return '<div class="chk ' + (ok ? 'ok' : '') + '"><span class="m">' + (ok ? '✓' : '·') + '</span><span>' + c.label + '</span></div>';
+  }).join('');
+
+  var mismatch = $('pw2').value && $('pw2').value !== p;
+  $('pw2').className = mismatch ? 'mismatch' : '';
+
+  var valid = CHECKS.every(function (c) { return c.test(p); });
+  $('submit').className = 'btn' + (valid ? ' ready' : '');
+  return valid;
+}
+
+$('pw').addEventListener('input', refresh);
+$('pw2').addEventListener('input', refresh);
+
+$('form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideMsg();
+  if (!refresh()) { showMsg('Check the rules above.', 'error'); return; }
+
+  $('submit').disabled = true;
+  $('label').innerHTML = '<span class="spin"></span>';
+  try {
+    var r = await fetch('/api/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: token, password: $('pw').value }),
+    });
+    var d = {};
+    try { d = await r.json(); } catch (err) { /* non-JSON */ }
+    if (!r.ok) {
+      showMsg(d.error || 'Could not reset the password.', 'error');
+      $('submit').disabled = false;
+      $('label').textContent = 'Update password';
+      return;
+    }
+    // Every session was invalidated server-side, so send them to sign in fresh.
+    $('form').style.display = 'none';
+    $('title').textContent = 'Password updated';
+    $('sub').textContent = 'You have been signed out everywhere. Sign in with your new password.';
+    showMsg('Taking you to sign in…', 'ok');
+    setTimeout(function () { location.href = '/mobile-login.html'; }, 1600);
+  } catch (err) {
+    showMsg('Could not reach the server. Try again in a moment.', 'error');
+    $('submit').disabled = false;
+    $('label').textContent = 'Update password';
+  }
+});
+
+if (!token) {
+  $('form').style.display = 'none';
+  $('title').textContent = 'Link incomplete';
+  $('sub').textContent = 'This page needs the reset link from your email.';
+  showMsg('No reset token in the address. Open the link from the email, or request a new one.', 'error');
+} else {
+  refresh();
+}
+</script>
+</body>
+</html>

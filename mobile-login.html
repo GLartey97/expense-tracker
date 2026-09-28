@@ -203,6 +203,9 @@ svg { display: block; }
         <span id="toggleText">Don't have an account?</span>
         <button type="button" id="toggleLink">Create one</button>
       </div>
+      <div class="toggle" id="forgotWrap">
+        <button type="button" id="forgotLink">Forgot your password?</button>
+      </div>
     </div>
 
     <div class="foot"><a id="deskLink" href="/login.html">Use the desktop view instead</a></div>
@@ -218,20 +221,28 @@ function nextTarget() {
   return /^\/(?![\/\\])/.test(raw) ? raw : '/mobile.html';
 }
 
-var mode = 'login'; // or 'register'
+var mode = 'login'; // login | register | forgot
 var $ = function (id) { return document.getElementById(id); };
 
 function setMode(m) {
   mode = m;
   var reg = m === 'register';
-  $('formTitle').textContent = reg ? 'Create your account' : 'Welcome back';
-  $('formSub').textContent = reg ? 'Pick a username and password to get started.' : 'Sign in to your account to continue.';
-  $('submitLabel').textContent = reg ? 'Create account' : 'Sign in';
-  $('toggleText').textContent = reg ? 'Already have an account?' : "Don't have an account?";
-  $('toggleLink').textContent = reg ? 'Sign in' : 'Create one';
+  var forgot = m === 'forgot';
+  $('formTitle').textContent = forgot ? 'Reset your password' : reg ? 'Create your account' : 'Welcome back';
+  $('formSub').textContent = forgot
+    ? 'Enter your username or recovery email and we will send a reset link.'
+    : reg ? 'Pick a username and password to get started.' : 'Sign in to your account to continue.';
+  $('submitLabel').textContent = forgot ? 'Send reset link' : reg ? 'Create account' : 'Sign in';
+  $('toggleText').textContent = forgot ? 'Remembered it?' : reg ? 'Already have an account?' : "Don't have an account?";
+  $('toggleLink').textContent = forgot ? 'Back to sign in' : reg ? 'Sign in' : 'Create one';
   $('password').setAttribute('autocomplete', reg ? 'new-password' : 'current-password');
   $('userHint').hidden = !reg;
   $('passHint').hidden = !reg;
+  // The reset flow only needs the account, so the password field steps aside.
+  $('password').closest('.field').hidden = forgot;
+  $('password').required = !forgot;
+  $('forgotWrap').hidden = forgot;
+  $('username').setAttribute('placeholder', forgot ? 'username or email' : 'your name');
   hideMsg();
 }
 
@@ -246,12 +257,13 @@ function setLoading(on) {
   $('submitBtn').disabled = on;
   $('submitLabel').innerHTML = on
     ? '<span class="spinner"></span>'
-    : (mode === 'register' ? 'Create account' : 'Sign in');
+    : (mode === 'forgot' ? 'Send reset link' : mode === 'register' ? 'Create account' : 'Sign in');
 }
 
 $('toggleLink').addEventListener('click', function () {
   setMode(mode === 'login' ? 'register' : 'login');
 });
+$('forgotLink').addEventListener('click', function () { setMode('forgot'); });
 
 $('peek').addEventListener('click', function () {
   var p = $('password');
@@ -266,6 +278,27 @@ $('authForm').addEventListener('submit', async function (e) {
   hideMsg();
   var username = $('username').value.trim();
   var password = $('password').value;
+
+  if (mode === 'forgot') {
+    if (!username) { showMsg('Enter your username or recovery email.', 'error'); return; }
+    setLoading(true);
+    try {
+      var fr = await fetch('/api/forgot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account: username }),
+      });
+      var fd = {};
+      try { fd = await fr.json(); } catch (err) { /* non-JSON */ }
+      if (!fr.ok) { showMsg(fd.error || 'Could not send the reset link.', 'error'); }
+      else { showMsg(fd.message || 'If that account has a recovery email, a link is on its way.', fd.mailEnabled ? 'ok' : 'error'); }
+    } catch (err) {
+      showMsg('Could not reach the server. Try again in a moment.', 'error');
+    }
+    setLoading(false);
+    return;
+  }
+
   // Mirrors the server's own rules so the common mistakes never make a round trip.
   if (username.length < 3) { showMsg('Username must be at least 3 characters.', 'error'); return; }
   if (password.length < 6) { showMsg('Password must be at least 6 characters.', 'error'); return; }
@@ -300,7 +333,8 @@ fetch('/api/me').then(function (r) {
   if (r.ok) window.location.href = nextTarget();
 }).catch(function () { /* offline — let them try the form */ });
 
-setMode('login');
+// Settings links here with #forgot when someone taps "Forgot current password?".
+setMode(location.hash === '#forgot' ? 'forgot' : 'login');
 </script>
 </body>
 </html>
