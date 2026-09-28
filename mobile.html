@@ -746,6 +746,20 @@ button.set-row:hover { background: var(--color-surface); }
   font-size: 12px; line-height: 1.55; color: var(--color-neutral-500);
 }
 
+/* currency confirmation */
+.cur-warn {
+  margin: 10px 0 0; padding: 14px; border-radius: var(--radius-md);
+  background: var(--color-surface); box-shadow: 0 0 0 1px rgba(145, 132, 217, .4);
+  font-size: 12.5px; line-height: 1.55; color: var(--color-neutral-400);
+}
+.cur-warn__head { font-size: 13.5px; font-weight: 600; color: var(--color-accent-400); margin-bottom: 6px; }
+.cur-warn__actions { display: flex; gap: 8px; margin-top: 13px; }
+
+/* tappable transaction rows */
+.txrow.tappable { cursor: pointer; transition: background .15s ease, box-shadow .15s ease; }
+.txrow.tappable:hover { background: #20222f; box-shadow: 0 0 0 1px rgba(145, 132, 217, .32); }
+.txrow.tappable:active { background: var(--color-surface); }
+
 /* import */
 .imp-or {
   text-align: center; font-size: 11.5px; color: var(--color-neutral-600);
@@ -943,6 +957,8 @@ var state = {
   pwUnsupported: false,
   importText: '',
   importReport: null,
+  curConfirm: null,
+  editTx: null,
 };
 
 var adviceTimer = null;
@@ -952,6 +968,8 @@ function setState(patch) { Object.assign(state, patch); render(); }
 
 /* ---------- backend ---------------------------------------------- */
 
+/* Whole-array save. Still used for categories and preferences, which are
+   small and rarely edited from two places at once. */
 function persist(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* private mode / quota */ }
   if (state.online) {
@@ -961,6 +979,71 @@ function persist(key, value) {
       body: JSON.stringify({ key: key, value: value }),
     }).catch(function () { /* keep the local copy; retry on next change */ });
   }
+}
+
+/* Local mirror only — no whole-array POST. Used alongside the per-entry API
+   so an offline device still has its data on next load. */
+function mirror(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* ignore */ }
+}
+
+var COLL = {};
+COLL[EXP_KEY] = 'expenses';
+COLL[INC_KEY] = 'income';
+COLL[WISH_KEY] = 'wishlist';
+
+/* One row at a time, so a save from another device can't be clobbered by us
+   posting a stale copy of the whole list. */
+function apiCreate(key, item) {
+  mirror(key, itemsFor(key));
+  if (!state.online) return Promise.resolve(item);
+  return fetch('/api/items/' + COLL[key], {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item),
+  }).then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) { return (d && d.item) || item; })
+    .catch(function () { return item; });
+}
+
+function apiUpdate(key, id, fields) {
+  mirror(key, itemsFor(key));
+  if (!state.online) return Promise.resolve();
+  return fetch('/api/items/' + COLL[key] + '/' + encodeURIComponent(id), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields),
+  }).catch(function () { /* local copy stands */ });
+}
+
+function apiDelete(key, id) {
+  mirror(key, itemsFor(key));
+  if (!state.online) return Promise.resolve();
+  return fetch('/api/items/' + COLL[key] + '/' + encodeURIComponent(id), {
+    method: 'DELETE',
+  }).catch(function () { /* local copy stands */ });
+}
+
+/* The server mints the real id; swap our placeholder for it so later edits and
+   deletes address the right row. */
+function adoptId(key, tempId, saved) {
+  if (!saved || saved.id == null || saved.id === tempId) return;
+  var list = itemsFor(key).map(function (x) {
+    return String(x.id) === String(tempId) ? Object.assign({}, x, { id: saved.id }) : x;
+  });
+  var patch = {};
+  if (key === EXP_KEY) patch.expenses = list;
+  else if (key === INC_KEY) patch.income = list;
+  else if (key === WISH_KEY) patch.wish = list;
+  setState(patch);
+  mirror(key, list);
+}
+
+function itemsFor(key) {
+  if (key === EXP_KEY) return state.expenses;
+  if (key === INC_KEY) return state.income;
+  if (key === WISH_KEY) return state.wish;
+  return [];
 }
 
 function readLocal(key) {
@@ -1007,6 +1090,20 @@ function sanitizePrefs(obj) {
 
 function persistCats() { persist(CATS_KEY, state.cats); }
 function persistPrefs() { persist(PREFS_KEY, state.prefs); }
+
+/* Switching currency changes the symbol only — there is no exchange rate here,
+   and silently relabelling ₵6,200 as $6,200 would be a lie about your money.
+   So: confirm once, and keep a marker of what the figures actually are. */
+function pickCurrency(code) {
+  if (code === state.prefs.currency) return;
+  var hasData = state.expenses.length || state.income.length;
+  if (hasData && !state.curConfirm) {
+    setState({ curConfirm: code });
+    return;
+  }
+  setState({ curConfirm: null });
+  setPref('currency', code);
+}
 
 function setPref(key, value) {
   var prefs = Object.assign({}, state.prefs);
@@ -1230,7 +1327,9 @@ function renderHome() {
     var initial = (x.desc || '?').trim().charAt(0).toUpperCase();
     var amt = (x.income ? '+' : '−') + amountOnly(x.amount);
     var bg = x.income ? '#cfd3e5' : catColor(x.cat);
-    return '<div class="txrow">' +
+    // Expenses are editable; income rows come from the desktop app's own form.
+    var tap = x.income ? '' : ' data-txedit="' + esc(String(x.id)) + '"';
+    return '<div class="txrow' + (x.income ? '' : ' tappable') + '"' + tap + '>' +
       '<span class="txrow__icon" style="background:' + bg + '">' + esc(initial) + '</span>' +
       '<div class="txrow__body">' +
         '<div class="txrow__desc">' + esc(x.desc) + '</div>' +
@@ -1529,12 +1628,23 @@ function renderSettingsRoot() {
         '<span class="set-row__ico">' + I.cedi + '</span>' +
         '<div class="set-row__body">' +
           '<div class="set-row__title">Currency</div>' +
-          '<div class="set-row__hint">Used across every amount</div>' +
+          '<div class="set-row__hint">Symbol only — amounts are not converted</div>' +
         '</div>' +
         '<div class="seg">' + CURRENCIES.map(function (c) {
           return '<button type="button" class="' + (state.prefs.currency === c ? 'active' : '') + '" data-cur="' + c + '">' + c + '</button>';
         }).join('') + '</div>' +
       '</div>' +
+      (state.curConfirm ? '<div class="cur-warn">' +
+        '<div class="cur-warn__head">Relabel as ' + esc(state.curConfirm) + '?</div>' +
+        '<div>There is no exchange rate here. Your existing figures stay the same numbers — ' +
+        money(1234.5) + ' would simply read ' +
+        esc((CUR_SYM[state.curConfirm] || '') + (1234.5).toLocaleString('en-GB', { minimumFractionDigits: 2 })) +
+        '. Only do this if you actually track in ' + esc(state.curConfirm) + '.</div>' +
+        '<div class="cur-warn__actions">' +
+          '<button class="btn-save" type="button" data-cur="' + esc(state.curConfirm) + '">Relabel</button>' +
+          '<button class="btn-cancel" type="button" data-act="cur-cancel">Cancel</button>' +
+        '</div>' +
+      '</div>' : '') +
       '<div class="set-row">' +
         '<span class="set-row__ico">' + I.calendar + '</span>' +
         '<div class="set-row__body">' +
@@ -1835,6 +1945,47 @@ function renderSheet() {
     '</div>';
 }
 
+/* ---------- edit sheet ----------------------------------------- */
+
+function renderEditSheet() {
+  if (!state.editTx) return '';
+  var e = state.editTx;
+  var ready = parseFloat(e.amount) > 0 && String(e.desc).trim();
+
+  var cats = state.cats.map(function (c) {
+    return '<button class="cat-pill ' + (e.category === c.name ? 'active' : '') + '" type="button" ' +
+      'data-editcat="' + esc(c.name) + '">' + esc(c.name) + '</button>';
+  }).join('');
+
+  return '<button class="sheet__scrim" type="button" data-act="close-edit" aria-label="Close"></button>' +
+    '<div class="sheet" role="dialog" aria-label="Edit entry">' +
+      '<div class="sheet__grip"></div>' +
+      '<div class="sheet__head">' +
+        '<div class="sheet__title">Edit entry</div>' +
+        '<button class="sheet__cancel" type="button" data-act="close-edit">Cancel</button>' +
+      '</div>' +
+
+      '<div class="field" style="margin-top:16px">' +
+        '<div class="pw-label">Description</div>' +
+        '<input class="field-input" data-field="txdesc" value="' + esc(e.desc) + '" placeholder="What was it?" aria-label="Description">' +
+      '</div>' +
+      '<div class="field" style="margin-top:12px">' +
+        '<div class="pw-label">Amount</div>' +
+        '<input class="field-input tnum" data-field="txamount" inputmode="decimal" value="' + esc(String(e.amount)) + '" placeholder="0.00" aria-label="Amount">' +
+      '</div>' +
+      '<div class="field" style="margin-top:12px">' +
+        '<div class="pw-label">Date</div>' +
+        '<input class="field-input" type="date" data-field="txdate" value="' + esc(e.date) + '" aria-label="Date">' +
+      '</div>' +
+
+      '<div class="pw-label" style="margin:14px 0 8px">Category</div>' +
+      '<div class="sheet__cats" style="padding:0 0 4px">' + cats + '</div>' +
+
+      '<button class="sheet__commit ' + (ready ? 'ready' : '') + '" type="button" data-act="save-edit">Save changes</button>' +
+      '<button class="btn-faint" type="button" data-act="delete-tx" style="margin-top:9px">Delete this entry</button>' +
+    '</div>';
+}
+
 /* ---------- toast --------------------------------------------- */
 
 function paintToast() {
@@ -1904,8 +2055,8 @@ function render() {
   tabbar.innerHTML = renderTabbar();
 
   var sheetLayer = document.getElementById('sheetLayer');
-  sheetLayer.hidden = !state.sheet;
-  sheetLayer.innerHTML = renderSheet();
+  sheetLayer.hidden = !state.sheet && !state.editTx;
+  sheetLayer.innerHTML = state.editTx ? renderEditSheet() : renderSheet();
 
   paintToast();
 }
@@ -1932,11 +2083,62 @@ function pressKey(k) {
 function commit() {
   var v = parseFloat(state.draft);
   if (!(v > 0)) return;
-  var e = { id: Date.now(), date: todayISO(), amount: round2(v), category: state.cat, desc: state.cat + ' — quick entry' };
-  var expenses = state.expenses.concat([e]);
-  setState({ expenses: expenses, sheet: false, draft: '' });
-  persist(EXP_KEY, expenses);
+  var e = { id: 'local-' + Date.now(), date: todayISO(), amount: round2(v), category: state.cat, desc: state.cat + ' — quick entry' };
+  setState({ expenses: state.expenses.concat([e]), sheet: false, draft: '' });
   flash(money(v) + ' logged to ' + state.cat);
+  apiCreate(EXP_KEY, { date: e.date, amount: e.amount, category: e.category, desc: e.desc })
+    .then(function (saved) { adoptId(EXP_KEY, e.id, saved); });
+}
+
+function openEdit(id) {
+  var e = null;
+  for (var i = 0; i < state.expenses.length; i++) {
+    if (String(state.expenses[i].id) === String(id)) { e = state.expenses[i]; break; }
+  }
+  if (!e) return;
+  setState({ editTx: {
+    id: e.id, desc: e.desc || '', amount: String(e.amount), date: String(e.date).slice(0, 10),
+    category: e.category || state.cats[0].name, fromWish: e.fromWish,
+  } });
+}
+
+function saveEdit() {
+  var d = state.editTx;
+  if (!d) return;
+  var amt = parseFloat(d.amount);
+  if (!(amt > 0)) { flash('Enter an amount above zero'); return; }
+  if (!String(d.desc).trim()) { flash('Give it a description'); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date)) { flash('Pick a valid date'); return; }
+  var expenses = state.expenses.map(function (e) {
+    if (String(e.id) !== String(d.id)) return e;
+    return Object.assign({}, e, {
+      desc: String(d.desc).trim(), amount: round2(amt), date: d.date, category: d.category,
+    });
+  });
+  setState({ expenses: expenses, editTx: null });
+  flash('Entry updated');
+  apiUpdate(EXP_KEY, d.id, {
+    desc: String(d.desc).trim(), amount: round2(amt), date: d.date, category: d.category,
+  });
+}
+
+function deleteTx() {
+  var d = state.editTx;
+  if (!d) return;
+  var expenses = state.expenses.filter(function (e) { return String(e.id) !== String(d.id); });
+  var wish = state.wish;
+  // If this entry came from a wishlist buy, put the item back rather than
+  // leaving it marked bought with nothing to show for it.
+  if (d.fromWish != null) {
+    wish = state.wish.map(function (w) {
+      return w.id === d.fromWish ? Object.assign({}, w, { bought: false, boughtDate: null }) : w;
+    });
+  }
+  var restored = wish !== state.wish;
+  setState({ expenses: expenses, wish: wish, editTx: null });
+  flash(d.fromWish != null ? 'Deleted — back on the wishlist' : 'Entry deleted');
+  apiDelete(EXP_KEY, d.id);
+  if (restored) apiUpdate(WISH_KEY, d.fromWish, { bought: false, boughtDate: null });
 }
 
 function toggleWish(i) {
@@ -1947,18 +2149,27 @@ function toggleWish(i) {
     return j === i ? Object.assign({}, x, { bought: nowBought, boughtDate: nowBought ? todayISO() : null }) : x;
   });
   var expenses = state.expenses;
+  var logged = null;
+  var removed = [];
   if (nowBought) {
-    expenses = state.expenses.concat([{
-      id: Date.now(), date: todayISO(), amount: round2(w.price),
+    logged = {
+      id: 'local-' + Date.now(), date: todayISO(), amount: round2(w.price),
       category: 'Shopping', desc: w.name, fromWish: w.id,
-    }]);
+    };
+    expenses = state.expenses.concat([logged]);
   } else {
+    removed = state.expenses.filter(function (e) { return e.fromWish === w.id; });
     expenses = state.expenses.filter(function (e) { return e.fromWish !== w.id; });
   }
   setState({ wish: wish, expenses: expenses });
-  persist(WISH_KEY, wish);
-  persist(EXP_KEY, expenses);
   flash(nowBought ? 'Bought — logged as Shopping' : 'Back on the wishlist');
+  apiUpdate(WISH_KEY, w.id, { bought: nowBought, boughtDate: nowBought ? todayISO() : null });
+  if (nowBought) {
+    apiCreate(EXP_KEY, { date: logged.date, amount: logged.amount, category: 'Shopping', desc: logged.desc, fromWish: w.id })
+      .then(function (saved) { adoptId(EXP_KEY, logged.id, saved); });
+  } else {
+    removed.forEach(function (e) { apiDelete(EXP_KEY, e.id); });
+  }
 }
 
 function buildPrompt(key, d, pendingWish) {
@@ -2179,6 +2390,7 @@ function mergeBackup(b) {
     expenses: 0, income: 0, wishlist: 0, categories: 0,
     skipped: 0, prefsSkipped: false,
   };
+  var addedExp = [], addedInc = [], addedWish = [];
 
   var cats = state.cats.slice();
   var catNames = {};
@@ -2215,6 +2427,7 @@ function mergeBackup(b) {
       bought: !!w.bought, boughtDate: w.boughtDate || null,
     });
     wishKeys[key] = true;
+    addedWish.push(wish[wish.length - 1]);
     rep.wishlist++;
   });
 
@@ -2235,6 +2448,7 @@ function mergeBackup(b) {
     if (e.fromWish != null && wishIdMap[e.fromWish] != null) row.fromWish = wishIdMap[e.fromWish];
     expenses.push(row);
     expKeys[key] = true;
+    addedExp.push(row);
     rep.expenses++;
   });
 
@@ -2245,8 +2459,10 @@ function mergeBackup(b) {
     if (!i || !i.date) return;
     var key = i.date + '|' + (+i.amount || 0) + '|' + norm(i.source);
     if (incKeys[key]) { rep.skipped++; return; }
-    income.push({ id: nextId(), date: String(i.date), amount: round2(+i.amount || 0), source: i.source || 'Income' });
+    var incRow = { id: nextId(), date: String(i.date), amount: round2(+i.amount || 0), source: i.source || 'Income' };
+    income.push(incRow);
     incKeys[key] = true;
+    addedInc.push(incRow);
     rep.income++;
   });
 
@@ -2256,9 +2472,12 @@ function mergeBackup(b) {
 
   setState({ cats: cats, wish: wish, expenses: expenses, income: income, importReport: rep });
   if (rep.categories) persistCats();
-  if (rep.wishlist) persist(WISH_KEY, wish);
-  if (rep.expenses) persist(EXP_KEY, expenses);
-  if (rep.income) persist(INC_KEY, income);
+  // Push the imported rows one at a time so an import can't wipe entries another
+  // device added while the file was being chosen.
+  mirror(WISH_KEY, wish); mirror(EXP_KEY, expenses); mirror(INC_KEY, income);
+  addedWish.forEach(function (w) { apiCreate(WISH_KEY, w).then(function (s) { adoptId(WISH_KEY, w.id, s); }); });
+  addedExp.forEach(function (e) { apiCreate(EXP_KEY, e).then(function (s) { adoptId(EXP_KEY, e.id, s); }); });
+  addedInc.forEach(function (i) { apiCreate(INC_KEY, i).then(function (s) { adoptId(INC_KEY, i.id, s); }); });
   return rep;
 }
 
@@ -2351,7 +2570,7 @@ async function savePassword() {
 
 var CLICK_SEL = '[data-go],[data-act],[data-quick],[data-wish],[data-advice],[data-key],' +
   '[data-sheetcat],[data-toggle],[data-cur],[data-day],[data-catedit],[data-catdel],' +
-  '[data-editcolor],[data-newcolor]';
+  '[data-editcolor],[data-newcolor],[data-txedit],[data-editcat]';
 
 document.getElementById('app').addEventListener('click', function (e) {
   var t = e.target.closest(CLICK_SEL);
@@ -2366,18 +2585,24 @@ document.getElementById('app').addEventListener('click', function (e) {
 
   /* settings */
   if (t.dataset.toggle) return setPref(t.dataset.toggle, !state.prefs[t.dataset.toggle]);
-  if (t.dataset.cur) return setPref('currency', t.dataset.cur);
+  if (t.dataset.cur) return pickCurrency(t.dataset.cur);
   if (t.dataset.day) return bumpDay(+t.dataset.day);
   if (t.dataset.catedit != null) return catEdit(+t.dataset.catedit);
   if (t.dataset.catdel != null) return catRemove(+t.dataset.catdel);
   if (t.dataset.editcolor) return setState({ editDraft: Object.assign({}, state.editDraft, { color: t.dataset.editcolor }) });
   if (t.dataset.newcolor) return setState({ newCat: Object.assign({}, state.newCat, { color: t.dataset.newcolor }) });
+  if (t.dataset.txedit) return openEdit(t.dataset.txedit);
+  if (t.dataset.editcat) return setState({ editTx: Object.assign({}, state.editTx, { category: t.dataset.editcat }) });
 
   switch (t.dataset.act) {
     case 'open-sheet': return openSheet();
     case 'close-sheet': return closeSheet();
     case 'commit': return commit();
     case 'privacy': return setPref('privacy', !state.prefs.privacy);
+    case 'cur-cancel': return setState({ curConfirm: null });
+    case 'close-edit': return setState({ editTx: null });
+    case 'save-edit': return saveEdit();
+    case 'delete-tx': return deleteTx();
 
     case 'settings': return openSettings();
     case 'settings-back': return settingsBack();
@@ -2408,6 +2633,9 @@ document.getElementById('app').addEventListener('input', function (e) {
   if (f === 'catname') return setState({ editDraft: Object.assign({}, state.editDraft, { name: v }) });
   if (f === 'newcat') return setState({ newCat: Object.assign({}, state.newCat, { name: v }) });
   if (f === 'importText') return setState({ importText: v });
+  if (f === 'txdesc') return setState({ editTx: Object.assign({}, state.editTx, { desc: v }) });
+  if (f === 'txamount') return setState({ editTx: Object.assign({}, state.editTx, { amount: v }) });
+  if (f === 'txdate') return setState({ editTx: Object.assign({}, state.editTx, { date: v }) });
   if (f.indexOf('pw-') === 0) {
     var patch = Object.assign({}, state.pw);
     patch[f.slice(3)] = v;
@@ -2416,6 +2644,10 @@ document.getElementById('app').addEventListener('input', function (e) {
 });
 
 document.addEventListener('keydown', function (e) {
+  if (state.editTx) {
+    if (e.key === 'Escape') setState({ editTx: null });
+    return;
+  }
   if (state.sheet) {
     if (e.key === 'Escape') { closeSheet(); return; }
     if (e.key === 'Enter') { commit(); return; }

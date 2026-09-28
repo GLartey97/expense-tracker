@@ -496,14 +496,9 @@
           </div>
           <div class="form-group">
             <label>Category</label>
-            <select id="expCategory">
-              <option value="Food & Transport">Food &amp; Transport</option>
-              <option value="Bills & Health">Bills &amp; Health</option>
-              <option value="Shopping">Shopping</option>
-              <option value="Entertainment">Entertainment</option>
-              <option value="Investment & Savings">Investment &amp; Savings</option>
-              <option value="Miscellaneous">Miscellaneous</option>
-            </select>
+            <!-- Populated from CATEGORIES at startup so categories renamed or
+                 added on the phone show up here too. -->
+            <select id="expCategory"></select>
           </div>
           <div class="form-group">
             <label>Description</label>
@@ -762,15 +757,37 @@ const WISH_KEY = 'cowork_wishlist_v1';
 const INC_KEY  = 'cowork_income_v1';
 const THEME_KEY= 'et_theme_v1';
 
-// Data lives server-side, per authenticated user. save() persists to the API;
-// the in-memory arrays are populated by bootstrap() before init() runs.
-const save = (key, v) => {
-  fetch('/api/data', {
+// Data lives server-side, per authenticated user; the in-memory arrays are
+// populated by bootstrap() before init() runs.
+//
+// Writes go one row at a time. Posting the whole array meant a save from this
+// tab could silently wipe an entry added on another device between our load
+// and our save.
+const COLL = { [EXP_KEY]: 'expenses', [INC_KEY]: 'income', [WISH_KEY]: 'wishlist' };
+const saveFailed = () => showToast('Could not save — check your connection', true);
+
+// Create: the server mints the id, so we swap our placeholder for the real one.
+function apiCreate(key, list, item) {
+  const { id, ...fields } = item; // the server assigns the id
+  return fetch('/api/items/' + COLL[key], {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key, value: v }),
-  }).catch(() => showToast('Could not save — check your connection', true));
-};
+    body: JSON.stringify(fields),
+  }).then(r => r.ok ? r.json() : Promise.reject())
+    .then(d => { if (d && d.item && d.item.id !== item.id) item.id = d.item.id; })
+    .catch(saveFailed);
+}
+function apiUpdate(key, id, fields) {
+  return fetch('/api/items/' + COLL[key] + '/' + encodeURIComponent(id), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields),
+  }).then(r => { if (!r.ok) saveFailed(); }).catch(saveFailed);
+}
+function apiDelete(key, id) {
+  return fetch('/api/items/' + COLL[key] + '/' + encodeURIComponent(id), { method: 'DELETE' })
+    .then(r => { if (!r.ok) saveFailed(); }).catch(saveFailed);
+}
 
 let expenses = [];
 let wishlist = [];
@@ -778,14 +795,39 @@ let income   = [];
 let currentUser = null;
 
 // ══ Constants ══
-const CATEGORIES = [
-  { key:'Food & Transport',      icon:'utensils',     color:'#f0a13a' },
-  { key:'Bills & Health',        icon:'receipt',      color:'#5b8def' },
-  { key:'Shopping',              icon:'shopping-bag', color:'#a78bfa' },
-  { key:'Entertainment',         icon:'film',         color:'#ef6fae' },
-  { key:'Investment & Savings',  icon:'trending-up',  color:'#2dd4bf' },
-  { key:'Miscellaneous',         icon:'package',      color:'#94a3b8' },
-];
+const CAT_KEY = 'cowork_categories_v1';
+
+// The phone view (mobile.html) lets you rename, recolour and add categories,
+// and stores them under CAT_KEY. Names are the shared identity — expenses
+// reference them — but each view keeps its own look, so this palette and the
+// Lucide icons stay here rather than following Nocturne's accent ramp.
+const CAT_STYLE = {
+  'Food & Transport':     { icon:'utensils',     color:'#f0a13a' },
+  'Bills & Health':       { icon:'receipt',      color:'#5b8def' },
+  'Shopping':             { icon:'shopping-bag', color:'#a78bfa' },
+  'Entertainment':        { icon:'film',         color:'#ef6fae' },
+  'Investment & Savings': { icon:'trending-up',  color:'#2dd4bf' },
+  'Miscellaneous':        { icon:'package',      color:'#94a3b8' },
+};
+// Colours cycled through for categories added on the phone, so a new one still
+// reads as distinct in the donut rather than every extra being grey.
+const CAT_FALLBACK = ['#f472b6','#38bdf8','#fbbf24','#4ade80','#c084fc','#fb7185','#22d3ee','#a3e635'];
+
+let CATEGORIES = Object.keys(CAT_STYLE).map(k => ({ key:k, ...CAT_STYLE[k] }));
+
+function applySharedCategories(list) {
+  if (!Array.isArray(list) || !list.length) return;
+  let extra = 0;
+  CATEGORIES = list
+    .filter(c => c && typeof c.name === 'string' && c.name.trim())
+    .map(c => {
+      const name = c.name.trim();
+      const known = CAT_STYLE[name];
+      if (known) return { key:name, ...known };
+      return { key:name, icon:'circle-dollar-sign', color:CAT_FALLBACK[extra++ % CAT_FALLBACK.length] };
+    });
+  if (!CATEGORIES.length) CATEGORIES = Object.keys(CAT_STYLE).map(k => ({ key:k, ...CAT_STYLE[k] }));
+}
 
 // ══ Helpers ══
 const catMeta = k => CATEGORIES.find(c=>c.key===k) || {icon:'circle-dollar-sign',color:'#94a3b8'};
@@ -868,8 +910,9 @@ function addIncome() {
   const source = document.getElementById('incSource').value.trim() || 'Income';
   if (!date)             { showToast('Pick a date', true); return; }
   if (!amount||amount<=0){ showToast('Enter a valid amount', true); return; }
-  income.unshift({ id:Date.now(), date, amount, source });
-  save(INC_KEY, income);
+  const incItem = { id:'local-'+Date.now(), date, amount, source };
+  income.unshift(incItem);
+  apiCreate(INC_KEY, income, incItem);
   renderIncomeList();
   updateHeaderBalance();
   showToast('Income logged');
@@ -879,7 +922,7 @@ function addIncome() {
 
 function deleteIncome(id) {
   income = income.filter(i=>i.id!==id);
-  save(INC_KEY, income);
+  apiDelete(INC_KEY, id);
   renderIncomeList();
   updateHeaderBalance();
   showToast('Income entry removed');
@@ -913,8 +956,9 @@ function addExpense() {
   if (!date)             { showToast('Pick a date', true); return; }
   if (!amount||amount<=0){ showToast('Enter a valid amount', true); return; }
   if (!desc)             { showToast('Add a description', true); return; }
-  expenses.unshift({ id:Date.now(), date, amount, category, desc });
-  save(EXP_KEY, expenses);
+  const expItem = { id:'local-'+Date.now(), date, amount, category, desc };
+  expenses.unshift(expItem);
+  apiCreate(EXP_KEY, expenses, expItem);
   renderRecent();
   updateHeaderBalance();
   showToast('Expense added');
@@ -924,7 +968,7 @@ function addExpense() {
 
 function deleteExpense(id) {
   expenses=expenses.filter(e=>e.id!==id);
-  save(EXP_KEY, expenses);
+  apiDelete(EXP_KEY, id);
   renderRecent();
   updateHeaderBalance();
   showToast('Expense removed');
@@ -1084,8 +1128,9 @@ function addWishItem() {
   const priority=document.getElementById('wPriority').value;
   const notes=document.getElementById('wNotes').value.trim();
   if(!name){ showToast('Enter an item name', true); return; }
-  wishlist.unshift({ id:Date.now(), name, price, priority, notes, bought:false, boughtDate:null });
-  save(WISH_KEY,wishlist);
+  const wishItem = { id:'local-'+Date.now(), name, price, priority, notes, bought:false, boughtDate:null };
+  wishlist.unshift(wishItem);
+  apiCreate(WISH_KEY, wishlist, wishItem);
   renderWishlist();
   showToast('Added to wishlist');
   document.getElementById('wName').value='';
@@ -1095,7 +1140,7 @@ function addWishItem() {
 
 function deleteWishItem(id) {
   wishlist=wishlist.filter(w=>w.id!==id);
-  save(WISH_KEY,wishlist);
+  apiDelete(WISH_KEY, id);
   renderWishlist();
   showToast('Item removed');
 }
@@ -1122,7 +1167,7 @@ function saveWishEdit() {
   item.price=parseFloat(document.getElementById('editPrice').value)||null;
   item.priority=document.getElementById('editPriority').value;
   item.notes=document.getElementById('editNotes').value.trim();
-  save(WISH_KEY,wishlist);
+  apiUpdate(WISH_KEY, item.id, { name:item.name, price:item.price, priority:item.priority, notes:item.notes });
   renderWishlist();
   closeEditModal();
   showToast('Item updated');
@@ -1140,10 +1185,11 @@ function confirmBuy(log) {
   document.getElementById('buyModal').classList.remove('open');
   const item=wishlist.find(w=>w.id===_buyId); if(!item) return;
   item.bought=true; item.boughtDate=today();
-  save(WISH_KEY,wishlist);
+  apiUpdate(WISH_KEY, item.id, { bought:true, boughtDate:item.boughtDate });
   if(log&&item.price){
-    expenses.unshift({id:Date.now(),date:today(),amount:item.price,category:'Shopping',desc:item.name});
-    save(EXP_KEY,expenses);
+    const boughtExp = {id:'local-'+Date.now(),date:today(),amount:item.price,category:'Shopping',desc:item.name,fromWish:item.id};
+    expenses.unshift(boughtExp);
+    apiCreate(EXP_KEY, expenses, boughtExp);
     renderRecent();
     updateHeaderBalance();
     showToast('Marked bought & logged as expense');
@@ -1250,8 +1296,18 @@ async function getAdvice(type, btn) {
 }
 
 // ══ Init ══
+function populateCategorySelect() {
+  const sel = document.getElementById('expCategory');
+  if (!sel) return;
+  const keep = sel.value;
+  sel.innerHTML = CATEGORIES.map(c =>
+    `<option value="${c.key.replace(/"/g,'&quot;')}">${escHtml(c.key)}</option>`).join('');
+  if (keep && CATEGORIES.some(c => c.key === keep)) sel.value = keep;
+}
+
 function init() {
   const t=today();
+  populateCategorySelect();
   document.getElementById('expDate').value=t;
   document.getElementById('incDate').value=t;
   document.getElementById('headerMonth').textContent=monthLabel(monthKey(t));
@@ -1305,6 +1361,7 @@ async function bootstrap() {
     expenses = Array.isArray(d[EXP_KEY])  ? d[EXP_KEY]  : [];
     wishlist = Array.isArray(d[WISH_KEY]) ? d[WISH_KEY] : [];
     income   = Array.isArray(d[INC_KEY])  ? d[INC_KEY]  : [];
+    applySharedCategories(d[CAT_KEY]);
   } catch (e) { /* start empty if the fetch fails */ }
 
   init();

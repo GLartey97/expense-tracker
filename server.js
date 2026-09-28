@@ -31,7 +31,12 @@ const ROOT = __dirname;
 const PORT = process.env.PORT || 5173;
 const DB_PATH = path.join(ROOT, 'data', 'db.json');
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const DATA_KEYS = ['cowork_expenses_v1', 'cowork_income_v1', 'cowork_wishlist_v1'];
+// Arrays the whole-blob endpoint accepts. The three entry lists are also
+// writable per-row via /api/items; categories are here because they are small
+// and edited rarely.
+const DATA_KEYS = ['cowork_expenses_v1', 'cowork_income_v1', 'cowork_wishlist_v1', 'cowork_categories_v1'];
+// Preferences are an object, not an array, so they get their own allowance.
+const DATA_OBJECT_KEYS = ['cowork_prefs_v1'];
 
 // ── Anthropic SDK (optional — Advisor degrades gracefully without a key) ──
 let anthropic = null;
@@ -100,6 +105,51 @@ function verifyPassword(password, stored) {
   const a = Buffer.from(hash, 'hex');
   return a.length === test.length && crypto.timingSafeEqual(a, test);
 }
+
+// ── Per-entry collections ──
+// Same storage keys the front-ends already use, so existing data is untouched.
+const COLLECTIONS = {
+  expenses: 'cowork_expenses_v1',
+  income: 'cowork_income_v1',
+  wishlist: 'cowork_wishlist_v1',
+};
+const MAX_ITEMS = 20000;
+
+// ── Rate limiting ──
+// scrypt is deliberately expensive, so unlimited login attempts are both a
+// brute-force hole and a way to pin the CPU. Single instance, so in-memory
+// counters are enough; they reset on restart, which is acceptable here.
+const RATE_WINDOW_MS = 15 * 60 * 1000;
+const RATE_MAX = 10;
+const rateHits = new Map(); // key -> number[] (timestamps)
+
+function clientIp(req) {
+  const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return fwd || req.socket.remoteAddress || 'unknown';
+}
+
+/** Returns seconds to wait, or 0 when the caller is under the limit. */
+function rateLimit(key) {
+  const now = Date.now();
+  const hits = (rateHits.get(key) || []).filter(t => now - t < RATE_WINDOW_MS);
+  if (hits.length >= RATE_MAX) {
+    rateHits.set(key, hits);
+    return Math.ceil((RATE_WINDOW_MS - (now - hits[0])) / 1000);
+  }
+  hits.push(now);
+  rateHits.set(key, hits);
+  return 0;
+}
+function rateClear(key) { rateHits.delete(key); }
+
+// Keep the map from growing without bound on a long-running instance.
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, hits] of rateHits) {
+    const live = hits.filter(t => now - t < RATE_WINDOW_MS);
+    if (live.length) rateHits.set(k, live); else rateHits.delete(k);
+  }
+}, RATE_WINDOW_MS).unref();
 
 // ── Sessions ──
 function createSession(userId) {
@@ -171,9 +221,38 @@ function serveStatic(req, res, urlPath) {
   });
 }
 
+// ── Security headers ──
+// The pages are self-contained apart from Google Fonts and the Claude API, so
+// the CSP can stay tight. 'unsafe-inline' is still needed because index.html,
+// login.html and mobile.html carry inline <style>/<script>.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data: blob:",
+  "connect-src 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+].join('; ');
+
+function securityHeaders(req, res) {
+  res.setHeader('Content-Security-Policy', CSP);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('X-Frame-Options', 'DENY');
+  // Render terminates TLS in front of us, so only advertise HSTS when the
+  // original request actually arrived over https.
+  if (String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  }
+}
+
 // ── Server ──
 const server = http.createServer(async (req, res) => {
   const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
+  securityHeaders(req, res);
 
   try {
     // ---- Health / diagnostics (no secrets) ----
@@ -188,6 +267,11 @@ const server = http.createServer(async (req, res) => {
 
     // ---- Auth ----
     if (urlPath === '/api/register' && req.method === 'POST') {
+      const regWait = rateLimit('reg:' + clientIp(req));
+      if (regWait) {
+        return sendJSON(res, 429, { error: `Too many attempts. Try again in ${Math.ceil(regWait / 60)} min.` },
+          { 'Retry-After': String(regWait) });
+      }
       const { username, password } = await readBody(req);
       const u = String(username || '').trim().toLowerCase();
       if (u.length < 3 || u.length > 32 || !/^[a-z0-9_.-]+$/.test(u))
@@ -205,9 +289,18 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/login' && req.method === 'POST') {
       const { username, password } = await readBody(req);
       const u = String(username || '').trim().toLowerCase();
+      // Limit per IP and per account, so neither one machine spraying accounts
+      // nor many machines targeting one account gets unlimited attempts.
+      const wait = rateLimit('ip:' + clientIp(req)) || rateLimit('user:' + u);
+      if (wait) {
+        return sendJSON(res, 429, { error: `Too many attempts. Try again in ${Math.ceil(wait / 60)} min.` },
+          { 'Retry-After': String(wait) });
+      }
       const user = db.users[u];
       if (!user || !verifyPassword(String(password || ''), user.password))
         return sendJSON(res, 401, { error: 'Wrong username or password.' });
+      rateClear('ip:' + clientIp(req));
+      rateClear('user:' + u);
       const token = createSession(user.id);
       return sendJSON(res, 200, { username: user.username }, { 'Set-Cookie': sessionCookie(token) });
     }
@@ -215,10 +308,16 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/password' && req.method === 'POST') {
       const user = userFromReq(req);
       if (!user) return sendJSON(res, 401, { error: 'Not signed in' });
+      const pwWait = rateLimit('pw:' + user.id);
+      if (pwWait) {
+        return sendJSON(res, 429, { error: `Too many attempts. Try again in ${Math.ceil(pwWait / 60)} min.` },
+          { 'Retry-After': String(pwWait) });
+      }
       const { current, next } = await readBody(req);
       // Knowing the session is not enough to take the account over.
       if (!verifyPassword(String(current || ''), user.password))
         return sendJSON(res, 401, { error: 'Current password is wrong.' });
+      rateClear('pw:' + user.id);
       const np = String(next || '');
       if (np.length < 8 || !/\d/.test(np))
         return sendJSON(res, 400, { error: 'New password needs 8+ characters and a number.' });
@@ -247,6 +346,64 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, { username: user.username });
     }
 
+    // ---- Per-entry writes ----
+    // /api/data replaces a whole array, so two devices saving at once means one
+    // silently wins. These endpoints mutate a single row instead; Node handles
+    // one request at a time, so concurrent edits from different devices merge
+    // rather than clobber.
+    if (urlPath.startsWith('/api/items/')) {
+      const user = userFromReq(req);
+      if (!user) return sendJSON(res, 401, { error: 'Not signed in' });
+
+      const parts = urlPath.split('/').filter(Boolean); // api, items, <coll>, <id?>
+      const key = COLLECTIONS[parts[2]];
+      if (!key) return sendJSON(res, 404, { error: 'Unknown collection' });
+      const id = parts[3] ? decodeURIComponent(parts[3]) : null;
+
+      db.data[user.id] = db.data[user.id] || {};
+      const list = Array.isArray(db.data[user.id][key]) ? db.data[user.id][key] : [];
+      const idx = id === null ? -1 : list.findIndex(x => String(x && x.id) === String(id));
+
+      if (req.method === 'POST') {
+        if (list.length >= MAX_ITEMS)
+          return sendJSON(res, 413, { error: `That list is full (${MAX_ITEMS} max).` });
+        const body = await readBody(req);
+        if (!body || typeof body !== 'object' || Array.isArray(body))
+          return sendJSON(res, 400, { error: 'Expected an object.' });
+        // The server owns ids unconditionally — honouring a client-supplied one
+        // would let two offline devices mint the same id and collide.
+        const item = { ...body, id: crypto.randomUUID() };
+        list.push(item);
+        db.data[user.id][key] = list;
+        saveDB();
+        return sendJSON(res, 200, { item });
+      }
+
+      if (req.method === 'PATCH') {
+        if (idx < 0) return sendJSON(res, 404, { error: 'No such entry.' });
+        const body = await readBody(req);
+        if (!body || typeof body !== 'object' || Array.isArray(body))
+          return sendJSON(res, 400, { error: 'Expected an object.' });
+        const item = { ...list[idx], ...body, id: list[idx].id };
+        list[idx] = item;
+        db.data[user.id][key] = list;
+        saveDB();
+        return sendJSON(res, 200, { item });
+      }
+
+      if (req.method === 'DELETE') {
+        // Already gone is a success — deleting twice shouldn't error.
+        if (idx >= 0) {
+          list.splice(idx, 1);
+          db.data[user.id][key] = list;
+          saveDB();
+        }
+        return sendJSON(res, 200, { ok: true });
+      }
+
+      return sendJSON(res, 405, { error: 'Method not allowed' });
+    }
+
     // ---- Per-user data ----
     if (urlPath === '/api/data') {
       const user = userFromReq(req);
@@ -254,8 +411,13 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'GET') return sendJSON(res, 200, db.data[user.id] || {});
       if (req.method === 'POST') {
         const { key, value } = await readBody(req);
-        if (!DATA_KEYS.includes(key)) return sendJSON(res, 400, { error: 'Unknown data key' });
-        if (!Array.isArray(value)) return sendJSON(res, 400, { error: 'Value must be an array' });
+        const isArrayKey = DATA_KEYS.includes(key);
+        const isObjectKey = DATA_OBJECT_KEYS.includes(key);
+        if (!isArrayKey && !isObjectKey) return sendJSON(res, 400, { error: 'Unknown data key' });
+        if (isArrayKey && !Array.isArray(value))
+          return sendJSON(res, 400, { error: 'Value must be an array' });
+        if (isObjectKey && (value === null || typeof value !== 'object' || Array.isArray(value)))
+          return sendJSON(res, 400, { error: 'Value must be an object' });
         db.data[user.id] = db.data[user.id] || {};
         db.data[user.id][key] = value;
         saveDB();
