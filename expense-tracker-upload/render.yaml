@@ -1,0 +1,32 @@
+# Render Blueprint — deploys the Expense Tracker as a free Node web service.
+# Render auto-injects PORT (server.js already reads process.env.PORT).
+# After the first deploy you'll get a public https URL you can install on Android.
+services:
+  - type: web
+    name: expense-tracker
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    autoDeploy: true
+    envVars:
+      # Set this in the dashboard to a Neon Postgres connection string so accounts
+      # persist across restarts. Without it the app uses an ephemeral file (data resets).
+      - key: DATABASE_URL
+        sync: false
+      # Optional — only needed to enable the AI Advisor tab.
+      # Leave blank in the dashboard if you don't have a Claude API key.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Optional — enables "Forgot password" emails. Get a key at resend.com.
+      # Without it the app says recovery isn't configured instead of failing.
+      - key: RESEND_API_KEY
+        sync: false
+      # The public URL used in reset links. Render injects RENDER_EXTERNAL_URL,
+      # which server.js falls back to, so this is only needed for a custom domain.
+      - key: APP_URL
+        sync: false
+      # Sender address. Defaults to Resend's shared onboarding@resend.dev, which
+      # only delivers to your own Resend signup address until you verify a domain.
+      - key: MAIL_FROM
+        sync: false
